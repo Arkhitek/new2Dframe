@@ -428,36 +428,151 @@ const normalizeSectionDimensions = (typeKey, rawDims = {}) => {
     return result;
 };
 
-const drawSectionWithDimensions = (svgElement, typeKey, dims, options = {}) => {
+const drawSectionWithDimensions = (svgElement, type, dims) => {
     svgElement.innerHTML = '';
-    svgElement.setAttribute('width', '240');
-    svgElement.setAttribute('height', '180');
-    svgElement.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-    svgElement.style.width = '100%';
-    svgElement.style.height = 'auto';
+    if (!dims || Object.values(dims).some(v => v === undefined || isNaN(v))) return;
 
-    const preparedDims = normalizeSectionDimensions(typeKey, dims);
-    const diagram = buildSectionDiagramData(typeKey, preparedDims, options);
+    const createSvgElement = (tag) => document.createElementNS('http://www.w3.org/2000/svg', tag);
 
-    if (diagram && diagram.markup) {
-        svgElement.setAttribute('viewBox', diagram.viewBox);
-        svgElement.innerHTML = diagram.markup;
-    } else {
-        svgElement.setAttribute('viewBox', '-120 -80 240 160');
-        svgElement.innerHTML = `
-            <defs>
-                <style>
-                    .placeholder-text {
-                        font-family: 'Segoe UI', sans-serif;
-                        font-size: 16px;
-                        fill: #475569;
-                    }
-                </style>
-            </defs>
-            <text class="placeholder-text" x="0" y="0" text-anchor="middle" dominant-baseline="central">断面情報なし</text>
-        `;
+    const g = createSvgElement('g');
+    g.setAttribute('fill', '#34495e');
+
+    const dimGroup = createSvgElement('g');
+    dimGroup.setAttribute('class', 'dimensions');
+
+    const thickDimGroup = createSvgElement('g');
+    thickDimGroup.setAttribute('class', 'dimensions thickness');
+    
+    let viewBox = "0 0 100 100";
+
+    try {
+        const {H, t1, t2, A, B, t, C, D} = dims;
+        const maxDim = Math.max(H || A || D || 0, B || 0);
+        const strokeWidth = maxDim / 150;
+        dimGroup.setAttribute('stroke-width', strokeWidth);
+        thickDimGroup.setAttribute('stroke-width', strokeWidth * 0.8);
+        const fontSize = maxDim / 12;
+        dimGroup.setAttribute('font-size', fontSize);
+        thickDimGroup.setAttribute('font-size', fontSize * 0.9);
+        const textOffset = maxDim / 25;
+
+        switch(type) {
+            case 'hkatakou_hiro': case 'hkatakou_naka': case 'hkatakou_hoso': case 'ikatakou': case 'keiryouhkatakou': case 'keiryourippuhkatakou': {
+                viewBox = `${-B * 0.75} ${-H * 0.75} ${B * 1.5} ${H * 1.5}`;
+                g.innerHTML = `<rect x="${-t1 / 2}" y="${-H / 2}" width="${t1}" height="${H}" /><rect x="${-B / 2}" y="${-H / 2}" width="${B}" height="${t2}" /><rect x="${-B / 2}" y="${H / 2 - t2}" width="${B}" height="${t2}" />`;
+                if (type === 'keiryourippuhkatakou' && C) {
+                    g.innerHTML += `<rect x="${-B/2}" y="${-H/2}" width="${t2}" height="${C}" /><rect x="${B/2-t2}" y="${-H/2}" width="${t2}" height="${C}" />`;
+                    g.innerHTML += `<rect x="${-B/2}" y="${H/2-C}" width="${t2}" height="${C}" /><rect x="${B/2-t2}" y="${H/2-C}" width="${t2}" height="${C}" />`;
+                    const cDimX = -B / 2 - B * 0.4;
+                    dimGroup.innerHTML += `<line x1="${cDimX}" y1="${-H/2}" x2="${cDimX}" y2="${-H/2+C}" /><text x="${cDimX - textOffset}" y="${-H/2+C/2}" dominant-baseline="middle" text-anchor="end">C=${C.toFixed(1)}</text>`;
+                }
+                const hDimX = -B / 2 - B * 0.2;
+                dimGroup.innerHTML += `<line x1="${hDimX}" y1="${-H/2}" x2="${hDimX}" y2="${H/2}" /><text x="${hDimX - textOffset}" y="0" dominant-baseline="middle" text-anchor="end">${H.toFixed(1)}</text>`;
+                const bDimY = H / 2 + H * 0.15;
+                dimGroup.innerHTML += `<line x1="${-B/2}" y1="${bDimY}" x2="${B/2}" y2="${bDimY}" /><text x="0" y="${bDimY + textOffset}" dominant-baseline="hanging" text-anchor="middle">${B.toFixed(1)}</text>`;
+                const t1DimY = -H / 2 - H * 0.1;
+                thickDimGroup.innerHTML += `<line x1="${-t1/2}" y1="${t1DimY}" x2="${t1/2}" y2="${t1DimY}" /><text x="0" y="${t1DimY - textOffset}" dominant-baseline="alphabetic" text-anchor="middle">t₁=${t1.toFixed(1)}</text>`;
+                const t2DimX = B / 2 + B * 0.1;
+                thickDimGroup.innerHTML += `<line x1="${t2DimX}" y1="${-H/2}" x2="${t2DimX}" y2="${-H/2+t2}" /><text x="${t2DimX + textOffset}" y="${-H/2+t2/2}" dominant-baseline="middle" text-anchor="start">t₂=${t2.toFixed(1)}</text>`;
+                break;
+            }
+            case 'mizogatakou': case 'keimizogatakou': {
+                const width = (type === 'mizogatakou') ? B : A;
+                viewBox = `${-width * 0.3} ${-H * 0.2} ${width * 1.6} ${H * 1.4}`;
+                const webT = (type === 'mizogatakou') ? t1 : t;
+                const flangeT = (type === 'mizogatakou') ? t2 : t;
+                g.innerHTML = `<rect x="0" y="0" width="${webT}" height="${H}" /><rect x="0" y="0" width="${width}" height="${flangeT}" /><rect x="0" y="${H - flangeT}" width="${width}" height="${flangeT}" />`;
+                const hDimX_mizo = -width * 0.15;
+                dimGroup.innerHTML += `<line x1="${hDimX_mizo}" y1="0" x2="${hDimX_mizo}" y2="${H}" /><text x="${hDimX_mizo - textOffset}" y="${H/2}" dominant-baseline="middle" text-anchor="end">${H.toFixed(1)}</text>`;
+                const bDimY_mizo = H + H * 0.15;
+                dimGroup.innerHTML += `<line x1="0" y1="${bDimY_mizo}" x2="${width}" y2="${bDimY_mizo}" /><text x="${width/2}" y="${bDimY_mizo + textOffset}" dominant-baseline="hanging" text-anchor="middle">${width.toFixed(1)}</text>`;
+                const t2DimX_mizo = width + width * 0.1;
+                thickDimGroup.innerHTML += `<line x1="${t2DimX_mizo}" y1="0" x2="${t2DimX_mizo}" y2="${flangeT}" /><text x="${t2DimX_mizo+textOffset}" y="${flangeT/2}" dominant-baseline="middle" text-anchor="start">t₂=${flangeT.toFixed(1)}</text>`;
+                const t1DimY_mizo = -H * 0.1;
+                thickDimGroup.innerHTML += `<line x1="0" y1="${t1DimY_mizo}" x2="${webT}" y2="${t1DimY_mizo}" /><text x="${webT/2}" y="${t1DimY_mizo-textOffset}" dominant-baseline="alphabetic" text-anchor="middle">t₁=${webT.toFixed(1)}</text>`;
+                break;
+            }
+            case 'rippumizokatakou': {
+                viewBox = `${-A * 0.3} ${-H * 0.2} ${A * 1.6} ${H * 1.4}`;
+                g.innerHTML = `<rect x="0" y="0" width="${t}" height="${H}" /><rect x="0" y="0" width="${A}" height="${t}" /><rect x="0" y="${H - t}" width="${A}" height="${t}" /><rect x="${A - t}" y="0" width="${t}" height="${C}" /><rect x="${A - t}" y="${H - C}" width="${t}" height="${C}" />`;
+                const hDimX_rip = -A * 0.15;
+                dimGroup.innerHTML += `<line x1="${hDimX_rip}" y1="0" x2="${hDimX_rip}" y2="${H}" /><text x="${hDimX_rip - textOffset}" y="${H/2}" dominant-baseline="middle" text-anchor="end">${H.toFixed(1)}</text>`;
+                const bDimY_rip = H + H * 0.15;
+                dimGroup.innerHTML += `<line x1="0" y1="${bDimY_rip}" x2="${A}" y2="${bDimY_rip}" /><text x="${A/2}" y="${bDimY_rip+textOffset}" dominant-baseline="hanging" text-anchor="middle">${A.toFixed(1)}</text>`;
+                const tDimX_rip = A + A * 0.1;
+                thickDimGroup.innerHTML += `<line x1="${tDimX_rip}" y1="${H/2 - t/2}" x2="${tDimX_rip}" y2="${H/2 + t/2}" /><text x="${tDimX_rip+textOffset}" y="${H/2}" dominant-baseline="middle" text-anchor="start">板厚t=${t.toFixed(1)}</text>`;
+                const cDimX_rip = A + A * 0.1;
+                dimGroup.innerHTML += `<line x1="${cDimX_rip}" y1="0" x2="${cDimX_rip}" y2="${C}" /><text x="${cDimX_rip+textOffset}" y="${C/2}" dominant-baseline="middle" text-anchor="start">C=${C.toFixed(1)}</text>`;
+                break;
+            }
+            case 'touhenyamakatakou': case 'futouhenyamagata': {
+                const B = (type === 'touhenyamakatakou') ? A : dims.B; // ▼▼▼ この行を追加 ▼▼▼
+                viewBox = `${-B * 0.3} ${-A * 0.2} ${B * 1.5} ${A * 1.4}`;
+                g.innerHTML = `<path d="M0,0 L0,${A} L${B},${A} L${B},${A-t} L${t},${A-t} L${t},0 Z" />`;
+                const hDimX_yama = -B * 0.15;
+                dimGroup.innerHTML += `<line x1="${hDimX_yama}" y1="0" x2="${hDimX_yama}" y2="${A}" /><text x="${hDimX_yama - textOffset}" y="${A/2}" dominant-baseline="middle" text-anchor="end">${A.toFixed(1)}</text>`;
+                const bDimY_yama = A + A * 0.15;
+                dimGroup.innerHTML += `<line x1="0" y1="${bDimY_yama}" x2="${B}" y2="${bDimY_yama}" /><text x="${B/2}" y="${bDimY_yama+textOffset}" dominant-baseline="hanging" text-anchor="middle">${B.toFixed(1)}</text>`;
+                const tDimX_yama = B + B * 0.1;
+                thickDimGroup.innerHTML += `<line x1="${tDimX_yama}" y1="${A-t}" x2="${tDimX_yama}" y2="${A}" /><text x="${tDimX_yama + textOffset}" y="${A-t/2}" dominant-baseline="middle" text-anchor="start">板厚t=${t.toFixed(1)}</text>`;
+                break;
+            }
+            case 'seihoukei': case 'tyouhoukei': {
+                const height = A;
+                // widthの宣言を1つに修正
+                const width = (type === 'seihoukei') ? A : B; 
+                viewBox = `${-width * 0.2} ${-height * 0.2} ${width * 1.5} ${height * 1.5}`;
+                g.setAttribute('fill-rule', 'evenodd');
+                g.innerHTML = `<path d="M0,0 H${width} V${height} H0 Z M${t},${t} V${height-t} H${width-t} V${t} Z" />`;
+                const hDimX_kaku = -width * 0.15;
+                dimGroup.innerHTML += `<line x1="${hDimX_kaku}" y1="0" x2="${hDimX_kaku}" y2="${height}" /><text x="${hDimX_kaku-textOffset}" y="${height/2}" dominant-baseline="middle" text-anchor="end">${height.toFixed(1)}</text>`;
+                const bDimY_kaku = height + height * 0.15;
+                dimGroup.innerHTML += `<line x1="0" y1="${bDimY_kaku}" x2="${width}" y2="${bDimY_kaku}" /><text x="${width/2}" y="${bDimY_kaku+textOffset}" dominant-baseline="hanging" text-anchor="middle">${width.toFixed(1)}</text>`;
+                const tDimY_kaku = -height * 0.1;
+                thickDimGroup.innerHTML += `<line x1="${width}" y1="${tDimY_kaku}" x2="${width-t}" y2="${tDimY_kaku}" /><text x="${width - t/2}" y="${tDimY_kaku - textOffset}" dominant-baseline="alphabetic" text-anchor="middle">板厚t=${t.toFixed(1)}</text>`;
+                break;
+            }
+            case 'koukan': {
+                viewBox = `${-D * 0.2} ${-D * 0.2} ${D * 1.5} ${D * 1.5}`;
+                const R = D / 2;
+                const r_inner = R - t;
+                g.setAttribute('fill-rule', 'evenodd');
+                g.innerHTML = `<path d="M${R},0 A${R},${R} 0 1,1 ${R},${D} A${R},${R} 0 1,1 ${R},0 Z M${R},${t} A${r_inner},${r_inner} 0 1,0 ${R},${D-t} A${r_inner},${r_inner} 0 1,0 ${R},${t} Z"/>`;
+                const dDimY = D + D * 0.1;
+                dimGroup.innerHTML += `<line x1="0" y1="${dDimY}" x2="${D}" y2="${dDimY}" /><text x="${R}" y="${dDimY+textOffset}" dominant-baseline="hanging" text-anchor="middle">φ${D.toFixed(1)}</text>`;
+                const tDimY_koukan = -D * 0.1;
+                thickDimGroup.innerHTML += `<line x1="${D}" y1="${tDimY_koukan}" x2="${D-t}" y2="${tDimY_koukan}" /><text x="${D - t/2}" y="${tDimY_koukan-textOffset}" dominant-baseline="alphabetic" text-anchor="middle">板厚t=${t.toFixed(1)}</text>`;
+                break;
+            }
+            case '矩形': {
+                const {H, B} = dims;
+                viewBox = `${-B * 0.2} ${-H * 0.2} ${B * 1.4} ${H * 1.4}`;
+                g.innerHTML = `<rect x="0" y="0" width="${B}" height="${H}" />`;
+                const hDimX_r = -B * 0.15;
+                dimGroup.innerHTML += `<line x1="${hDimX_r}" y1="0" x2="${hDimX_r}" y2="${H}" /><text x="${hDimX_r-textOffset}" y="${H/2}" dominant-baseline="middle" text-anchor="end">${H.toFixed(1)}</text>`;
+                const bDimY_r = H + H * 0.15;
+                dimGroup.innerHTML += `<line x1="0" y1="${bDimY_r}" x2="${B}" y2="${bDimY_r}" /><text x="${B/2}" y="${bDimY_r+textOffset}" dominant-baseline="hanging" text-anchor="middle">${B.toFixed(1)}</text>`;
+                break;
+            }
+            case '円形': {
+                const {D} = dims;
+                viewBox = `${-D * 0.2} ${-D * 0.2} ${D * 1.4} ${D * 1.4}`;
+                g.innerHTML = `<circle cx="${D/2}" cy="${D/2}" r="${D/2}" />`;
+                const dDimY_c = D + D * 0.1;
+                dimGroup.innerHTML += `<line x1="0" y1="${dDimY_c}" x2="${D}" y2="${dDimY_c}" /><text x="${D/2}" y="${dDimY_c+textOffset}" dominant-baseline="hanging" text-anchor="middle">φ${D.toFixed(1)}</text>`;
+                break;
+            }
+        }
+        svgElement.setAttribute('viewBox', viewBox);
+        svgElement.appendChild(g);
+        svgElement.appendChild(dimGroup);
+        svgElement.appendChild(thickDimGroup);
+    } catch (error) {
+        console.error("SVG Drawing Error:", error);
+        svgElement.innerHTML = '';
     }
 };
+
 
 const buildSectionDiagramData = (typeKey, rawDims = {}, options = {}) => {
         const {
