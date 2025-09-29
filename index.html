@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2次元フレームの構造解析＆断面算定</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>2次元フレームの構造解析＆断面算定</h1>
+        </header>
+
+        <main>
+            <div class="input-section">
+                
+
+
+                <h2>1. モデル図</h2>
+
+                <div id="operation-guide">
+                    <h4>操作ガイド</h4>
+                    <ul>
+                        <li><b>モード選択:</b> 上部のボタンで「選択/移動」「節点追加」「部材追加」を切り替えます。</li>
+                        <li><b>基本操作:</b>
+                            <ul style="margin-top:4px; margin-bottom:4px;">
+                                <li><b>通常のドラッグ:</b> キャンバスの表示位置を移動します（パン機能）。</li>
+                                <li><b>マウスホイール:</b> 拡大・縮小ができます。</li>
+                                <li><b>クリック:</b> 節点や部材を単独選択します。</li>
+                                <li><b>右クリック:</b> コンテキストメニューで編集・削除を行います。</li>
+                                <li><b>Escapeキー:</b> 現在の選択をクリアします。</li>
+                            </ul>
+                        </li>
+                        <li><b>複数選択機能:</b>
+                            <ul style="margin-top:4px; margin-bottom:4px;">
+                                <li><b>Shift + クリック:</b> 複数の節点や部材を個別に選択・解除できます。</li>
+                                <li><b>Shift + ドラッグ:</b> 矩形の範囲選択で複数の要素を一度に選択できます。</li>
+                                <li><b>範囲選択時のメニュー:</b> 節点と部材が同時に含まれる場合は、「節点のみ」または「部材のみ」を選択するメニューが表示されます。</li>
+                                <li><b>選択表示:</b> 選択された要素は赤色で強調表示されます。</li>
+                                <li><b>Deleteキー:</b> 選択された節点・部材を一括削除できます。関連する荷重も自動的に削除されます。</li>
+                                <li><b>一括編集:</b> 複数選択した要素のプロパティを一括変更できます。</li>
+                            </ul>
+                        </li>
+                        <li><b>モデルの編集:</b>
+                            <ul style="margin-top:4px; margin-bottom:4px;">
+                                <li><b>節点の右クリック:</b> 座標、荷重、境界条件の編集・削除ができます。</li>
+                                <li><b>部材の右クリック:</b> 材料、断面性能、接合条件、分布荷重の編集・削除ができます。</li>
+                                <li><b>荷重矢印の右クリック:</b> その荷重を直接編集できます。</li>
+                                <li><b>材料設定:</b> 弾性係数Eに応じて基準強度の選択肢が自動連動します。</li>
+                                <li><b>断面選択:</b> 「断面選択」ツールと連携して断面性能を設定できます。</li>
+                            </ul>
+                        </li>
+                        <li><b>キーボードショートカット:</b>
+                             <ul style="margin-top:4px; margin-bottom:4px;">
+                                <li><b>S:</b> 選択/移動モードに切り替え</li>
+                                <li><b>N:</b> 節点追加モードに切り替え</li>
+                                <li><b>M:</b> 部材追加モードに切り替え</li>
+                                <li><b>C:</b> 計算実行</li>
+                                <li><b>R:</b> レポート出力</li>
+                                <li><b>A:</b> 自動スケーリング</li>
+                                <li><b>G:</b> グリッド表示の切り替え</li>
+                                <li><b>Ctrl+Z:</b> 元に戻す</li>
+                                <li><b>Ctrl+S:</b> 入力データ保存</li>
+                                <li><b>Ctrl+O:</b> 入力データ読込</li>
+                                <li><b>Escape:</b> 選択をクリア</li>
+                                <li><b>Delete:</b> 選択された要素を削除</li>
+                             </ul>
+                        </li>
+                        <li><b>全体操作:</b>
+                             <ul style="margin-top:4px; margin-bottom:4px;">
+                                <li><b>↩️ 元に戻す:</b> 直前の操作を取り消します。</li>
+                                <li><b>🔍 自動スケーリング:</b> モデル全体を描画範囲に合わせて表示します。</li>
+                                <li><b>🔄 モデルリセット:</b> 全てのモデル情報を消去します。</li>
+                                <li><b>グリッド表示:</b> チェックボックスでグリッドの表示・非表示を切り替えられます。</li>
+                                <li><b>拡大・縮小ボタン:</b> +/-ボタンでも拡大・縮小操作ができます。</li>
+                             </ul>
+                        </li>
+                        <li><b>計算と入出力:</b>
+                            <ul style="margin-top:4px; margin-bottom:4px;">
+                                <li><b>計算実行ボタン:</b> 解析を実行し、結果図やアニメーションを表示します。</li>
+                                <li><b>計算例プリセット:</b> 様々なサンプルモデルを読み込みます。</li>
+                                <li><b>入力保存/読込:</b> モデルデータをCSV形式で保存・読込します。</li>
+                                <li><b>レポート出力:</b> 入力と結果をまとめた印刷用のレポートを生成します。</li>
+                            </ul>
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="model-controls">
+                    <button id="auto-scale-btn" class="auto-scale-btn" title="描画範囲をモデル図の大きさに合わせて自動スケーリング (ショートカット: A)">🔍 自動スケーリング</button>
+                    <button id="reset-model-btn" class="reset-btn" title="モデル情報を全て消去します">🔄 モデルリセット</button>
+                    
+                    <div class="display-controls" style="margin-top: 10px; display: flex; gap: 15px; font-size: 14px;">
+                        <label style="display: flex; align-items: center; cursor: pointer;">
+                            <input type="checkbox" id="show-external-loads" checked style="margin-right: 5px;">
+                            外部荷重表示
+                        </label>
+                        <label style="display: flex; align-items: center; cursor: pointer;">
+                            <input type="checkbox" id="show-self-weight" checked style="margin-right: 5px;">
+                            自重表示
+                        </label>
+                    </div>
+                </div>
+
+                <div class="canvas-controls">
+                    <div>
+                        <button id="mode-select" class="mode-btn" title="節点の選択と移動 (ショートカット: S)">選択/移動 (S)</button>
+                        <span class="help-icon" id="help-select">?</span>
+                        <button id="mode-add-node" class="mode-btn" title="キャンバスをクリックして節点を追加 (ショートカット: N)">節点追加 (N)</button>
+                        <span class="help-icon" id="help-add-node">?</span>
+                        <button id="mode-add-member" class="mode-btn" title="2つの節点をクリックして部材を追加 (ショートカット: M)">部材追加 (M)</button>
+                        <span class="help-icon" id="help-add-member">?</span>
+                        <button id="frame-generator-btn" class="frame-generator-btn" title="多層多スパンラーメン構造を自動生成">フレームジェネレーター</button>
+                        <button id="undo-btn" title="元に戻す (ショートカット: Ctrl+Z)">↩️ 元に戻す</button>
+                    </div>
+                    <div class="canvas-settings">
+                        <label for="anim-scale-input">アニメーション倍率:</label>
+                        <input type="number" id="anim-scale-input" class="grid-input" style="width: 100px;" placeholder="自動">
+                        <input type="checkbox" id="grid-toggle" checked>
+                        <label for="grid-toggle" title="グリッド表示切替 (ショートカット: G)">グリッド表示</label>
+                        <input type="checkbox" id="member-info-toggle" title="マウスオーバー時の部材情報表示切替">
+                        <label for="member-info-toggle" title="マウスオーバー時の部材情報表示切替">部材情報</label>
+                        <label for="grid-spacing">間隔(m):</label>
+                        <input type="number" id="grid-spacing" value="1.0" step="0.5" class="grid-input">
+                        <button id="zoom-in-btn" title="拡大">+</button>
+                        <button id="zoom-out-btn" title="縮小">-</button>
+                    </div>
+                </div>
+                <div class="canvas-container">
+                    <canvas id="model-canvas"></canvas>
+                    <div id="member-tooltip" class="member-tooltip hidden">
+                        <div class="tooltip-header">部材情報</div>
+                        <div class="tooltip-body">
+                            <div class="tooltip-column tooltip-meta"></div>
+                            <div class="tooltip-column tooltip-section-block"></div>
+                        </div>
+                    </div>
+                </div>
+                <div style="margin-top: 10px;">
+                    <button id="calculate-and-animate-btn">計算実行 & アニメーション表示</button>
+                </div>
+                <div class="file-controls">
+                    <div>
+                        <label for="preset-selector"><b>計算例プリセット:</b></label>
+                        <select id="preset-selector"></select>
+                    </div>
+                    <div>
+                        <button id="save-btn" title="入力データを保存 (ショートカット: Ctrl+S)">入力保存</button>
+                        <button id="load-btn" title="入力データを読込 (ショートカット: Ctrl+O)">入力読込</button>
+                    </div>
+                </div>
+
+                <h2>2. 荷重条件</h2>
+                <div class="grid-inputs">
+                    <div class="table-container">
+                        <h3>節点荷重</h3>
+                        <table id="node-loads-table">
+                            <thead>
+                                <tr>
+                                    <th>節点 #</th>
+                                    <th>X方向荷重 Px (kN)</th>
+                                    <th>Y方向荷重 Py (kN)</th>
+                                    <th>モーメント Mz (kN・m)</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                        <button id="add-node-load-btn">節点荷重を追加</button>
+                    </div>
+                    <div class="table-container">
+                        <h3>部材等分布荷重</h3>
+                        <table id="member-loads-table">
+                            <thead>
+                                <tr>
+                                    <th>部材 #</th>
+                                    <th>部材座標系y方向 w (kN/m)</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                        <button id="add-member-load-btn">部材荷重を追加</button>
+                    </div>
+                </div>
+
+                <h2>3. 構造定義</h2>
+                <div>
+                    <div class="table-container">
+                        <h3>節点座標と境界条件</h3>
+                        <table id="nodes-table">
+                            <thead>
+                                <tr>
+                                    <th style="width:10%">節点 #</th>
+                                    <th style="width:25%">X座標 (m)</th>
+                                    <th style="width:25%">Y座標 (m)</th>
+                                    <th style="width:25%">境界条件</th>
+                                    <th style="width:15%"></th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                        <button id="add-node-btn">節点を追加</button>
+                    </div>
+
+                    <div class="table-container">
+                        <h3>部材 (物性値・接合条件)</h3>
+                        <div style="margin-bottom: 10px;">
+                            <label>
+                                <input type="checkbox" id="consider-self-weight-checkbox"> 
+                                部材の自重を考慮する
+                            </label>
+                        </div>
+                        <table id="members-table">
+                            <thead>
+                                <tr>
+                                    <th>部材#</th>
+                                    <th>始点#i</th>
+                                    <th>終点#j</th>
+                                    <th>弾性係数 E (N/mm²)</th>
+                                    <th class="section-check-item">基準強度 F (N/mm²)</th>
+                                    <th>断面二次モーメント I (cm⁴)</th>
+                                    <th>断面積 A (cm²)</th>
+                                    <th class="section-check-item">断面係数 Z (cm³)</th>
+                                    <th class="density-column" style="display: none;">密度 ρ (kg/m³)</th>
+                                    <th>部材断面選択</th>
+                                    <th>始端</th>
+                                    <th>終端</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                        <button id="add-member-btn">部材を追加</button>
+                    </div>
+                </div>
+
+                <button id="calculate-btn" title="構造解析を実行 (ショートカット: C)">計算実行</button>
+            </div>
+
+
+            <div class="output-section">
+                <div class="output-header">
+                    <h2>計算結果</h2>
+                    <button id="report-btn" style="margin-top:0;" title="レポート出力 (ショートカット: R)">レポート出力</button>
+                    <button id="export-excel-btn" style="margin-top:0;">📊 エクセル出力</button>
+                </div>
+                <div id="error-message" class="error"></div>
+                
+                <div class="result-visuals">
+                    <div class="canvas-container">
+                        <h3>変位図 (mm)</h3>
+                        <div class="canvas-settings" style="justify-content: flex-end; margin-bottom: 5px;">
+                            <label for="disp-scale-input">表示倍率:</label>
+                            <input type="number" id="disp-scale-input" class="grid-input" style="width: 100px;">
+                        </div>
+                        <canvas id="displacement-canvas"></canvas>
+                    </div>
+                    <div class="canvas-container">
+                        <h3>曲げモーメント図 (BMD) (kN・m)</h3>
+                        <canvas id="moment-canvas"></canvas>
+                    </div>
+                    <div class="canvas-container">
+                        <h3>軸力図 (AFD) (kN)</h3>
+                        <canvas id="axial-canvas"></canvas>
+                    </div>
+                    <div class="canvas-container">
+                        <h3>せん断力図 (SFD) (kN)</h3>
+                        <canvas id="shear-canvas"></canvas>
+                    </div>
+                </div>
+
+                <h3>節点変位</h3>
+                <div class="table-container-result">
+                    <table id="displacement-results"></table>
+                </div>
+
+                <h3>支点反力</h3>
+                <div class="table-container-result">
+                    <table id="reaction-results"></table>
+                </div>
+
+                <h3>部材端力</h3>
+                <div class="table-container-result">
+                    <table id="force-results"></table>
+                </div>
+
+                <div class="section-check-item">
+                    <div class="output-header">
+                        <h2>断面算定結果</h2>
+                        <div class="check-controls">
+                            <label><input type="radio" name="load-term" value="short" checked> 短期</label>
+                            <label><input type="radio" name="load-term" value="long"> 長期</label>
+                        </div>
+                    </div>
+                    <div class="canvas-container">
+                        <h3>検定比図 (D/C)</h3>
+                        <canvas id="ratio-canvas"></canvas>
+                    </div>
+                    <h3>検定比 詳細</h3>
+                    <div class="table-container-result">
+                        <table id="section-check-results"></table>
+                    </div>
+                </div>
+
+                <div class="output-section">
+                    <div class="output-header">
+                        <h2>弾性座屈解析結果</h2>
+                    </div>
+                    <h3>座屈解析 詳細</h3>
+                    <div class="table-container-result">
+                        <table id="buckling-analysis-results"></table>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <div id="node-context-menu" class="context-menu">
+        <div class="context-menu-item" id="menu-edit-coords">座標を編集...</div>
+        <div class="context-menu-item" id="menu-add-load">節点荷重を編集...</div>
+        <div class="context-menu-separator"></div>
+        <div class="context-menu-item" data-support="free">境界条件: 自由</div>
+        <div class="context-menu-item" data-support="pinned">境界条件: ピン</div>
+        <div class="context-menu-item" data-support="fixed">境界条件: 固定</div>
+        <div class="context-menu-item" data-support="roller">境界条件: ローラー</div>
+        <div class="context-menu-separator"></div>
+        <div class="context-menu-item" id="menu-delete-node">節点を削除</div>
+    </div>
+
+    <div id="member-props-popup" class="popup-box">
+        <h4>部材プロパティ編集</h4>
+        <div class="props-grid">
+            <label for="popup-e-container">E (N/mm²)</label>
+            <div id="popup-e-container"></div>
+            <label for="popup-f-container" class="section-check-item">F (N/mm²)</label>
+            <div id="popup-f-container" class="section-check-item"></div>
+            <label for="popup-i">I (cm⁴)</label>
+            <input type="number" id="popup-i">
+            <label for="popup-a">A (cm²)</label>
+            <input type="number" id="popup-a">
+            <label for="popup-z" class="section-check-item">Z (cm³)</label>
+<input type="number" id="popup-z" class="section-check-item">
+            <label for="popup-i-conn">始端接合</label>
+            <select id="popup-i-conn">
+                <option value="rigid">剛</option>
+                <option value="pinned">ピン</option>
+            </select>
+            <label for="popup-j-conn">終端接合</label>
+            <select id="popup-j-conn">
+                <option value="rigid">剛</option>
+                <option value="pinned">ピン</option>
+            </select>
+             <label for="popup-w">w (kN/m)</label>
+            <input type="number" id="popup-w" title="等分布荷重">
+        </div>
+        <div class="popup-buttons">
+            <button id="popup-select-section">断面選択...</button> <button id="popup-delete-member">削除</button>
+            <button id="popup-cancel">キャンセル</button>
+            <button id="popup-save">保存</button>
+        </div>
+    </div>
+    
+    <div id="node-load-popup" class="popup-box">
+        <h4>節点荷重編集</h4>
+        <div class="props-grid">
+            <label for="popup-px">Px (kN)</label>
+            <input type="number" id="popup-px">
+            <label for="popup-py">Py (kN)</label>
+            <input type="number" id="popup-py">
+            <label for="popup-mz">Mz (kN・m)</label>
+            <input type="number" id="popup-mz">
+        </div>
+        <div class="popup-buttons">
+            <button id="popup-node-load-cancel">キャンセル</button>
+            <button id="popup-node-load-save">保存</button>
+        </div>
+    </div>
+
+    <div id="node-coords-popup" class="popup-box">
+        <h4>節点座標編集</h4>
+        <div class="props-grid">
+            <label for="popup-x">X (m)</label>
+            <input type="number" id="popup-x">
+            <label for="popup-y">Y (m)</label>
+            <input type="number" id="popup-y">
+        </div>
+        <div class="popup-buttons">
+            <button id="popup-coords-cancel">キャンセル</button>
+            <button id="popup-coords-save">保存</button>
+        </div>
+    </div>
+
+    <div id="add-member-popup" class="popup-box">
+        <h4>部材追加設定</h4>
+        <p style="font-size: 13px; margin-top: -5px; margin-bottom: 15px;">キャンバス上で追加する部材の物性値を設定します。</p>
+        <div class="props-grid">
+            <label for="add-popup-e-container">E (N/mm²)</label>
+            <div id="add-popup-e-container"></div>
+            <label for="add-popup-f-container" class="section-check-item">F (N/mm²)</label>
+            <div id="add-popup-f-container" class="section-check-item"></div>
+            <label for="add-popup-i">I (cm⁴)</label>
+            <input type="number" id="add-popup-i">
+            <label for="add-popup-a">A (cm²)</label>
+            <input type="number" id="add-popup-a">
+            <label for="add-popup-z" class="section-check-item">Z (cm³)</label>
+<input type="number" id="add-popup-z" class="section-check-item">
+            <label for="add-popup-i-conn">始端接合</label>
+            <select id="add-popup-i-conn">
+                <option value="rigid">剛</option>
+                <option value="pinned">ピン</option>
+            </select>
+            <label for="add-popup-j-conn">終端接合</label>
+            <select id="add-popup-j-conn">
+                <option value="rigid">剛</option>
+                <option value="pinned">ピン</option>
+            </select>
+        </div>
+        <div class="popup-buttons">
+            <button id="add-popup-cancel">キャンセル</button>
+            <button id="add-popup-ok">OK</button>
+        </div>
+    </div>
+
+    <!-- フレームジェネレーター モーダル -->
+    <div id="frame-generator-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>フレームジェネレーター</h3>
+                <span class="modal-close">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="generator-section">
+                    <h4>基本設定</h4>
+                    <div class="generator-row">
+                        <label for="frame-floors">層数:</label>
+                        <input type="number" id="frame-floors" min="1" max="20" value="3" step="1">
+                        <span class="unit">層</span>
+                    </div>
+                    <div class="generator-row">
+                        <label for="frame-spans">スパン数:</label>
+                        <input type="number" id="frame-spans" min="1" max="20" value="3" step="1">
+                        <span class="unit">スパン</span>
+                    </div>
+                </div>
+                
+                <div class="generator-section">
+                    <h4>寸法設定</h4>
+                    <div class="generator-row">
+                        <label for="frame-span-length">スパン長:</label>
+                        <input type="number" id="frame-span-length" min="1" max="50" value="6.0" step="0.1">
+                        <span class="unit">m</span>
+                    </div>
+                    <div class="generator-row">
+                        <label for="frame-floor-height">階高:</label>
+                        <input type="number" id="frame-floor-height" min="1" max="20" value="3.5" step="0.1">
+                        <span class="unit">m</span>
+                    </div>
+                </div>
+                
+                <div class="generator-section">
+                    <h4>境界条件設定</h4>
+                    <div class="generator-row">
+                        <label>
+                            <input type="checkbox" id="frame-fix-base" checked>
+                            基礎部を固定支点とする（チェック外すとピン支点）
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="generator-section">
+                    <h4>配置設定</h4>
+                    <div class="generator-row">
+                        <label for="frame-start-x">開始X座標:</label>
+                        <input type="number" id="frame-start-x" value="0.0" step="0.1">
+                        <span class="unit">m</span>
+                    </div>
+                    <div class="generator-row">
+                        <label for="frame-start-y">開始Y座標:</label>
+                        <input type="number" id="frame-start-y" value="0.0" step="0.1">
+                        <span class="unit">m</span>
+                    </div>
+                </div>
+                
+                <div class="generator-preview">
+                    <div class="preview-text">
+                        <strong>生成予定:</strong> 
+                        <span id="preview-nodes">12</span>節点, 
+                        <span id="preview-members">17</span>部材<br>
+                        <strong>基礎支点:</strong> <span id="preview-support">固定支点</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="frame-generator-cancel" class="cancel-btn">キャンセル</button>
+                <button id="frame-generator-generate" class="generate-btn">生成</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="frame_analyzer.js"></script>
+    <script src="communication.js"></script>
+</body>
+</html>
