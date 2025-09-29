@@ -738,12 +738,84 @@ canvas {
 
 /* Operation Guide */
 #operation-guide {
-    background-color: #f0f8ff; border: 1px solid #d1d9e0; border-radius: 6px;
-    padding: 10px 15px; margin-bottom: 15px; font-size: 13px;
+    background-color: #f0f8ff; 
+    border: 1px solid #d1d9e0; 
+    border-radius: 6px;
+    padding: 15px; 
+    margin-bottom: 15px; 
+    font-size: 13px;
 }
-#operation-guide h4 { margin: 0 0 8px 0; color: #005A9C; font-size: 1.1em; }
-#operation-guide ul { margin: 0; padding-left: 20px; list-style: "✓ "; }
-#operation-guide li { margin-bottom: 4px; }
+
+#operation-guide h4 { 
+    margin: 0 0 12px 0; 
+    color: #005A9C; 
+    font-size: 1.1em; 
+    text-align: center;
+}
+
+/* 2列レイアウト */
+.guide-columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+.guide-column {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.guide-section {
+    background-color: rgba(255, 255, 255, 0.6);
+    border-radius: 4px;
+    padding: 10px;
+}
+
+.guide-section h5 {
+    margin: 0 0 6px 0;
+    color: #005A9C;
+    font-size: 0.95em;
+    font-weight: bold;
+    border-bottom: 1px solid #d1d9e0;
+    padding-bottom: 3px;
+}
+
+.guide-section ul { 
+    margin: 0; 
+    padding-left: 16px; 
+    list-style-type: none;
+}
+
+.guide-section li { 
+    margin-bottom: 2px; 
+    font-size: 12px;
+    line-height: 1.4;
+    position: relative;
+}
+
+.guide-section li::before {
+    content: "▸";
+    color: #005A9C;
+    margin-right: 4px;
+    font-size: 10px;
+}
+
+.guide-section li strong {
+    color: #2c3e50;
+}
+
+/* レスポンシブ対応 */
+@media (max-width: 1200px) {
+    .guide-columns {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+    
+    .guide-column {
+        gap: 10px;
+    }
+}
 
 /* Section Check Toggling */
 body.section-check-disabled .section-check-item {

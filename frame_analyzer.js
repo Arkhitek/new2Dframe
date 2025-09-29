@@ -2995,10 +2995,10 @@ document.addEventListener('DOMContentLoaded', () => {
         // 選択された節点に変更を適用
         pushState(); // 変更前の状態を保存
         
+        const editedCount = selectedNodes.size;
         for (const nodeIndex of selectedNodes) {
             const row = elements.nodesTable.rows[nodeIndex];
             if (!row) continue;
-            
             // 座標の更新
             if (updates.coordX) {
                 const currentX = parseFloat(row.cells[1].querySelector('input').value);
@@ -3007,7 +3007,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     currentX + updates.coordX.value;
                 row.cells[1].querySelector('input').value = newX.toFixed(2);
             }
-            
             if (updates.coordY) {
                 const currentY = parseFloat(row.cells[2].querySelector('input').value);
                 const newY = updates.coordY.mode === 'set' ? 
@@ -3015,19 +3014,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     currentY + updates.coordY.value;
                 row.cells[2].querySelector('input').value = newY.toFixed(2);
             }
-            
             // 境界条件の更新
             if (updates.support) {
                 row.cells[3].querySelector('select').value = updates.support;
             }
         }
-        
         if (typeof drawOnCanvas === 'function') {
             drawOnCanvas();
         }
         document.body.removeChild(document.getElementById('bulk-node-edit-dialog'));
         clearMultiSelection(); // 編集後に選択をクリア
-        
         // 成功メッセージを表示
         const message = document.createElement('div');
         message.style.position = 'fixed';
@@ -3038,9 +3034,8 @@ document.addEventListener('DOMContentLoaded', () => {
         message.style.padding = '10px 15px';
         message.style.borderRadius = '4px';
         message.style.zIndex = '4000';
-        message.textContent = `${selectedNodes.size}つの節点を一括編集しました`;
+        message.textContent = `${editedCount}つの節点を一括編集しました`;
         document.body.appendChild(message);
-        
         setTimeout(() => message.remove(), 3000);
     };
 
@@ -4431,6 +4426,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     // 部材番号テキストを描画
                     ctx.fillStyle = "#000000";
                     ctx.fillText(memberText, labelInfo.textX, labelInfo.textY + 2);
+                    
+                    // 部材線描画用の設定を復元
+                    ctx.strokeStyle = color;
+                    ctx.lineWidth = 2;
                 }
             }
         });
@@ -5595,8 +5594,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else {
                     status = '安全';
                 }
-            } else {
+            } else if (axialForceKN > 0) {
+                // 引張材の場合
                 status = '引張材（座屈なし）';
+                safetyFactor = '∞';
+            } else {
+                // 軸力が0の場合
+                status = '座屈なし';
                 safetyFactor = '∞';
             }
 

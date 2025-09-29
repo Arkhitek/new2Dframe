@@ -21,70 +21,97 @@
 
                 <div id="operation-guide">
                     <h4>操作ガイド</h4>
-                    <ul>
-                        <li><b>モード選択:</b> 上部のボタンで「選択/移動」「節点追加」「部材追加」を切り替えます。</li>
-                        <li><b>基本操作:</b>
-                            <ul style="margin-top:4px; margin-bottom:4px;">
-                                <li><b>通常のドラッグ:</b> キャンバスの表示位置を移動します（パン機能）。</li>
-                                <li><b>マウスホイール:</b> 拡大・縮小ができます。</li>
-                                <li><b>クリック:</b> 節点や部材を単独選択します。</li>
-                                <li><b>右クリック:</b> コンテキストメニューで編集・削除を行います。</li>
-                                <li><b>Escapeキー:</b> 現在の選択をクリアします。</li>
-                            </ul>
-                        </li>
-                        <li><b>複数選択機能:</b>
-                            <ul style="margin-top:4px; margin-bottom:4px;">
-                                <li><b>Shift + クリック:</b> 複数の節点や部材を個別に選択・解除できます。</li>
-                                <li><b>Shift + ドラッグ:</b> 矩形の範囲選択で複数の要素を一度に選択できます。</li>
-                                <li><b>範囲選択時のメニュー:</b> 節点と部材が同時に含まれる場合は、「節点のみ」または「部材のみ」を選択するメニューが表示されます。</li>
-                                <li><b>選択表示:</b> 選択された要素は赤色で強調表示されます。</li>
-                                <li><b>Deleteキー:</b> 選択された節点・部材を一括削除できます。関連する荷重も自動的に削除されます。</li>
-                                <li><b>一括編集:</b> 複数選択した要素のプロパティを一括変更できます。</li>
-                            </ul>
-                        </li>
-                        <li><b>モデルの編集:</b>
-                            <ul style="margin-top:4px; margin-bottom:4px;">
-                                <li><b>節点の右クリック:</b> 座標、荷重、境界条件の編集・削除ができます。</li>
-                                <li><b>部材の右クリック:</b> 材料、断面性能、接合条件、分布荷重の編集・削除ができます。</li>
-                                <li><b>荷重矢印の右クリック:</b> その荷重を直接編集できます。</li>
-                                <li><b>材料設定:</b> 弾性係数Eに応じて基準強度の選択肢が自動連動します。</li>
-                                <li><b>断面選択:</b> 「断面選択」ツールと連携して断面性能を設定できます。</li>
-                            </ul>
-                        </li>
-                        <li><b>キーボードショートカット:</b>
-                             <ul style="margin-top:4px; margin-bottom:4px;">
-                                <li><b>S:</b> 選択/移動モードに切り替え</li>
-                                <li><b>N:</b> 節点追加モードに切り替え</li>
-                                <li><b>M:</b> 部材追加モードに切り替え</li>
-                                <li><b>C:</b> 計算実行</li>
-                                <li><b>R:</b> レポート出力</li>
-                                <li><b>A:</b> 自動スケーリング</li>
-                                <li><b>G:</b> グリッド表示の切り替え</li>
-                                <li><b>Ctrl+Z:</b> 元に戻す</li>
-                                <li><b>Ctrl+S:</b> 入力データ保存</li>
-                                <li><b>Ctrl+O:</b> 入力データ読込</li>
-                                <li><b>Escape:</b> 選択をクリア</li>
-                                <li><b>Delete:</b> 選択された要素を削除</li>
-                             </ul>
-                        </li>
-                        <li><b>全体操作:</b>
-                             <ul style="margin-top:4px; margin-bottom:4px;">
-                                <li><b>↩️ 元に戻す:</b> 直前の操作を取り消します。</li>
-                                <li><b>🔍 自動スケーリング:</b> モデル全体を描画範囲に合わせて表示します。</li>
-                                <li><b>🔄 モデルリセット:</b> 全てのモデル情報を消去します。</li>
-                                <li><b>グリッド表示:</b> チェックボックスでグリッドの表示・非表示を切り替えられます。</li>
-                                <li><b>拡大・縮小ボタン:</b> +/-ボタンでも拡大・縮小操作ができます。</li>
-                             </ul>
-                        </li>
-                        <li><b>計算と入出力:</b>
-                            <ul style="margin-top:4px; margin-bottom:4px;">
-                                <li><b>計算実行ボタン:</b> 解析を実行し、結果図やアニメーションを表示します。</li>
-                                <li><b>計算例プリセット:</b> 様々なサンプルモデルを読み込みます。</li>
-                                <li><b>入力保存/読込:</b> モデルデータをCSV形式で保存・読込します。</li>
-                                <li><b>レポート出力:</b> 入力と結果をまとめた印刷用のレポートを生成します。</li>
-                            </ul>
-                        </li>
-                    </ul>
+                    <div class="guide-columns">
+                        <div class="guide-column">
+                            <div class="guide-section">
+                                <h5>📍 基本操作</h5>
+                                <ul>
+                                    <li><strong>ドラッグ:</strong> 画面移動（パン）</li>
+                                    <li><strong>ホイール:</strong> 拡大・縮小</li>
+                                    <li><strong>クリック:</strong> 単独選択</li>
+                                    <li><strong>右クリック:</strong> コンテキストメニュー</li>
+                                    <li><strong>Shift+クリック:</strong> 複数選択</li>
+                                    <li><strong>Shift+ドラッグ:</strong> 範囲選択</li>
+                                </ul>
+                            </div>
+                            
+                            <div class="guide-section">
+                                <h5>🎯 モード選択</h5>
+                                <ul>
+                                    <li><strong>S:</strong> 選択/移動モード</li>
+                                    <li><strong>N:</strong> 節点追加モード</li>
+                                    <li><strong>M:</strong> 部材追加モード</li>
+                                </ul>
+                            </div>
+                            
+                            <div class="guide-section">
+                                <h5>⚙️ 編集機能</h5>
+                                <ul>
+                                    <li><strong>節点右クリック:</strong> 座標・荷重・境界条件編集</li>
+                                    <li><strong>部材右クリック:</strong> 材料・断面・接合・分布荷重編集</li>
+                                    <li><strong>荷重矢印右クリック:</strong> 荷重の直接編集</li>
+                                    <li><strong>複数選択:</strong> 一括編集・削除可能</li>
+                                    <li><strong>Delete:</strong> 選択要素を削除</li>
+                                </ul>
+                            </div>
+                            
+                            <div class="guide-section">
+                                <h5>🔧 便利機能</h5>
+                                <ul>
+                                    <li><strong>フレームジェネレーター:</strong> 多層ラーメン自動生成</li>
+                                    <li><strong>断面選択ツール:</strong> 鋼材断面の選択・設定</li>
+                                    <li><strong>自動スケーリング (A):</strong> 全体表示</li>
+                                    <li><strong>グリッド表示 (G):</strong> 作図補助</li>
+                                    <li><strong>部材情報表示:</strong> マウスオーバー情報</li>
+                                </ul>
+                            </div>
+                        </div>
+                        
+                        <div class="guide-column">
+                            <div class="guide-section">
+                                <h5>⌨️ キーボードショートカット</h5>
+                                <ul>
+                                    <li><strong>C:</strong> 計算実行</li>
+                                    <li><strong>R:</strong> レポート出力</li>
+                                    <li><strong>Ctrl+Z:</strong> 元に戻す</li>
+                                    <li><strong>Ctrl+S:</strong> 入力データ保存</li>
+                                    <li><strong>Ctrl+O:</strong> 入力データ読込</li>
+                                    <li><strong>Escape:</strong> 選択クリア</li>
+                                </ul>
+                            </div>
+                            
+                            <div class="guide-section">
+                                <h5>📊 解析・結果表示</h5>
+                                <ul>
+                                    <li><strong>構造解析:</strong> 変位・断面力・支点反力</li>
+                                    <li><strong>断面算定:</strong> 検定比・短期/長期</li>
+                                    <li><strong>弾性座屈解析:</strong> 座屈荷重・安全率</li>
+                                    <li><strong>アニメーション:</strong> 変位の動的表示</li>
+                                    <li><strong>応力図:</strong> BMD・AFD・SFD・検定比図</li>
+                                </ul>
+                            </div>
+                            
+                            <div class="guide-section">
+                                <h5>� データ管理</h5>
+                                <ul>
+                                    <li><strong>プリセット:</strong> 計算例の読込</li>
+                                    <li><strong>CSV保存/読込:</strong> 入力データ管理</li>
+                                    <li><strong>レポート出力:</strong> 印刷用総合レポート</li>
+                                    <li><strong>エクセル出力:</strong> 結果データのExcel形式出力</li>
+                                </ul>
+                            </div>
+                            
+                            <div class="guide-section">
+                                <h5>🔍 表示制御</h5>
+                                <ul>
+                                    <li><strong>外部荷重表示:</strong> 外部荷重の表示切替</li>
+                                    <li><strong>自重表示:</strong> 自重荷重の表示切替</li>
+                                    <li><strong>倍率調整:</strong> アニメーション・変位図倍率</li>
+                                    <li><strong>選択強調:</strong> 選択要素の赤色表示</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="model-controls">
