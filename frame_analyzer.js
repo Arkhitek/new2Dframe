@@ -2698,9 +2698,10 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // 接合条件の更新 - 密度列を考慮したインデックス調整
             const hasDensityColumn = row.querySelector('.density-cell') !== null;
-            const iConnIndex = hasDensityColumn ? 10 : 9; // 始端のインデックス
-            const jConnIndex = hasDensityColumn ? 11 : 10; // 終端のインデックス
-            
+            // 基本列(7) + 密度列(0or1) + 断面名称列(1) + 軸方向列(1) + 接続列(2)
+            const iConnIndex = hasDensityColumn ? 12 : 11; // 始端のインデックス
+            const jConnIndex = hasDensityColumn ? 13 : 12; // 終端のインデックス
+
             if (updates.i_conn) row.cells[iConnIndex].querySelector('select').value = updates.i_conn;
             if (updates.j_conn) row.cells[jConnIndex].querySelector('select').value = updates.j_conn;
             
@@ -6551,80 +6552,15 @@ document.addEventListener('DOMContentLoaded', () => {
     // 部材追加設定の断面選択ボタン
     document.getElementById('add-popup-select-section').onclick = () => {
         const url = `steel_selector.html?targetMember=addDefaults`;
+        console.log('🚀 断面選択ウィンドウを開きます:', url);
         const popup = window.open(url, 'SteelSelector', 'width=1200,height=800,scrollbars=yes,resizable=yes');
 
         if (!popup) {
             alert('ポップアップブロッカーにより断面選択ツールを開けませんでした。ポップアップを許可してください。');
-            return;
+            console.error('❌ ポップアップブロック: 断面選択ウィンドウが開けませんでした');
+        } else {
+            console.log('✅ 断面選択ウィンドウが開きました。storageイベントでデータ受信を待機します。');
         }
-
-        // ポップアップから戻った時の処理
-        const checkPopup = setInterval(() => {
-            if (popup.closed) {
-                clearInterval(checkPopup);
-                const storedData = localStorage.getItem('steelSelectionForFrameAnalyzer');
-                console.log('🔍 部材追加設定: localStorageデータ取得:', storedData);
-                if (storedData) {
-                    try {
-                        const data = JSON.parse(storedData);
-                        console.log('🔍 部材追加設定: パースされたデータ:', data);
-                        console.log('🔍 部材追加設定: targetMemberIndex:', data.targetMemberIndex);
-                        console.log('🔍 部材追加設定: properties:', data.properties);
-
-                        if (data.targetMemberIndex === 'addDefaults' && data.properties) {
-                            // 部材追加設定のデフォルト値を更新
-                            document.getElementById('add-popup-i').value = data.properties.I;
-                            document.getElementById('add-popup-a').value = data.properties.A;
-                            document.getElementById('add-popup-z').value = data.properties.Z;
-
-                            // デフォルト値も更新
-                            newMemberDefaults.I = data.properties.I;
-                            newMemberDefaults.A = data.properties.A;
-                            newMemberDefaults.Z = data.properties.Z;
-
-                            // 断面名称と軸方向を保存・表示
-                            const sectionName = data.properties.sectionName || data.properties.sectionLabel || '';
-                            const axisLabel = data.properties.sectionAxisLabel || (data.properties.sectionAxis ? data.properties.sectionAxis.label : null) || '-';
-
-                            console.log('🔍 部材追加設定: 断面名称:', sectionName);
-                            console.log('🔍 部材追加設定: 軸方向:', axisLabel);
-
-                            if (sectionName) {
-                                newMemberDefaults.sectionName = sectionName;
-                                newMemberDefaults.sectionAxis = axisLabel;
-
-                                // 表示要素を更新
-                                const infoDiv = document.getElementById('add-popup-section-info');
-                                const nameSpan = document.getElementById('add-popup-section-name');
-                                const axisSpan = document.getElementById('add-popup-section-axis');
-
-                                console.log('🔍 部材追加設定: 表示要素:', { infoDiv, nameSpan, axisSpan });
-
-                                if (infoDiv && nameSpan && axisSpan) {
-                                    nameSpan.textContent = sectionName;
-                                    axisSpan.textContent = axisLabel;
-                                    infoDiv.style.display = 'block';
-                                    console.log('✅ 部材追加設定: 断面情報を表示しました');
-                                }
-                            } else {
-                                console.warn('⚠️ 部材追加設定: 断面名称が空です');
-                            }
-
-                            localStorage.removeItem('steelSelectionForFrameAnalyzer');
-                        } else {
-                            console.warn('⚠️ 部材追加設定: 条件不一致', {
-                                targetMatch: data.targetMemberIndex === 'addDefaults',
-                                hasProperties: !!data.properties
-                            });
-                        }
-                    } catch (e) {
-                        console.error('断面選択データの解析エラー:', e);
-                    }
-                } else {
-                    console.warn('⚠️ 部材追加設定: localStorageにデータがありません');
-                }
-            }
-        }, 500);
     };
 
     document.getElementById('add-popup-ok').onclick = () => {
@@ -6925,9 +6861,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 // Dynamic cell index calculation for connections
                 const hasDensityColumn = document.querySelector('.density-column') && document.querySelector('.density-column').style.display !== 'none';
-                const iConnIndex = hasDensityColumn ? 10 : 9;
-                const jConnIndex = hasDensityColumn ? 11 : 10;
-                
+                // 基本列(7) + 密度列(0or1) + 断面名称列(1) + 軸方向列(1) + 接続列(2)
+                const iConnIndex = hasDensityColumn ? 12 : 11;
+                const jConnIndex = hasDensityColumn ? 13 : 12;
+
                 const props = {E:E_val, F:F_val, I:I_m4, A:A_m2, Z:Z_m3, i_conn:memberRow.cells[iConnIndex].querySelector('select').value, j_conn:memberRow.cells[jConnIndex].querySelector('select').value};
                 memberRow.querySelector('.delete-row-btn').onclick.apply(memberRow.querySelector('.delete-row-btn'));
                 addRow(elements.nodesTable, [`#`,`<input type="number" value="${finalCoords.x.toFixed(2)}">`,`<input type="number" value="${finalCoords.y.toFixed(2)}">`,`<select><option value="free" selected>自由</option><option value="pinned">ピン</option><option value="fixed">固定</option><option value="roller">ローラー</option></select>`], false);
@@ -6942,20 +6879,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (elements.gridToggle.checked && dist < snapTolerance) { modelCoords.x=snappedX; modelCoords.y=snappedY; }
                 addRow(elements.nodesTable, [`#`,`<input type="number" value="${modelCoords.x.toFixed(2)}">`,`<input type="number" value="${modelCoords.y.toFixed(2)}">`,`<select><option value="free" selected>自由</option><option value="pinned">ピン</option><option value="fixed">固定</option><option value="roller">ローラー</option></select>`]); 
             }
-        } else if (canvasMode === 'addMember') { 
-            if (clickedNodeIndex !== -1) { 
-                if (firstMemberNode === null) { firstMemberNode = clickedNodeIndex; } 
+        } else if (canvasMode === 'addMember') {
+            if (clickedNodeIndex !== -1) {
+                if (firstMemberNode === null) { firstMemberNode = clickedNodeIndex; }
                 else {
                     if (firstMemberNode !== clickedNodeIndex) {
                         const I_m4 = parseFloat(newMemberDefaults.I)*1e-8, A_m2 = parseFloat(newMemberDefaults.A)*1e-4, Z_m3 = parseFloat(newMemberDefaults.Z)*1e-6;
                         const sectionName = newMemberDefaults.sectionName || '';
                         const sectionAxis = newMemberDefaults.sectionAxis || '';
+                        console.log('🔍 部材追加: newMemberDefaults:', { sectionName, sectionAxis, I: newMemberDefaults.I, A: newMemberDefaults.A, Z: newMemberDefaults.Z });
                         addRow(elements.membersTable, [`#`, ...memberRowHTML(firstMemberNode+1, clickedNodeIndex+1, newMemberDefaults.E, newMemberDefaults.F, I_m4, A_m2, Z_m3, newMemberDefaults.i_conn, newMemberDefaults.j_conn, sectionName, sectionAxis)]);
                     }
                     firstMemberNode = null;
-                } 
-                drawOnCanvas(); 
-            } 
+                }
+                drawOnCanvas();
+            }
         } 
     });
 
@@ -7178,9 +7116,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             // Dynamic cell index calculation for connections
-            const iConnIndex = hasDensityColumn ? 10 : 9;
-            const jConnIndex = hasDensityColumn ? 11 : 10;
-            
+            // 基本列(7) + 密度列(0or1) + 断面名称列(1) + 軸方向列(1) + 接続列(2)
+            const iConnIndex = hasDensityColumn ? 12 : 11;
+            const jConnIndex = hasDensityColumn ? 13 : 12;
+
             document.getElementById('popup-i-conn').value = memberRow.cells[iConnIndex].querySelector('select').value;
             document.getElementById('popup-j-conn').value = memberRow.cells[jConnIndex].querySelector('select').value;
             const memberLoadRow = Array.from(elements.memberLoadsTable.rows).find(row => parseInt(row.cells[0].querySelector('input').value)-1 === selectedMemberIndex);
@@ -7647,9 +7586,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         // Dynamic cell index calculation for connections
-        const iConnIndex = hasDensityColumn ? 10 : 9;
-        const jConnIndex = hasDensityColumn ? 11 : 10;
-        
+        // 基本列(7) + 密度列(0or1) + 断面名称列(1) + 軸方向列(1) + 接続列(2)
+        const iConnIndex = hasDensityColumn ? 12 : 11;
+        const jConnIndex = hasDensityColumn ? 13 : 12;
+
         memberRow.cells[iConnIndex].querySelector('select').value = document.getElementById('popup-i-conn').value;
         memberRow.cells[jConnIndex].querySelector('select').value = document.getElementById('popup-j-conn').value;
         const wValue = parseFloat(document.getElementById('popup-w').value) || 0;
@@ -9242,7 +9182,17 @@ const loadPreset = (index) => {
             const I_m4 = m.I || 1e-9;
             const A_m2 = m.A || 1e-3;
             const Z_m3 = m.Z || 1e-9;
-            const rowCells = memberRowHTML(m.i, m.j, E_N_mm2, F_N_mm2, I_m4, A_m2, Z_m3, m.i_conn || m.ic, m.j_conn || m.jc);
+
+            // プリセットから断面情報と軸情報を取得
+            const presetProfile = findPresetSectionProfile(m);
+            const sectionInfoFromPreset = presetProfile ? cloneDeep(presetProfile.sectionInfo) : parseSectionInfoFromMember(m);
+            const axisInfo = buildAxisInfo(m, sectionInfoFromPreset);
+
+            // 断面名称と軸方向を取得
+            const sectionName = sectionInfoFromPreset?.label || '';
+            const sectionAxis = axisInfo?.label || '';
+
+            const rowCells = memberRowHTML(m.i, m.j, E_N_mm2, F_N_mm2, I_m4, A_m2, Z_m3, m.i_conn || m.ic, m.j_conn || m.jc, sectionName, sectionAxis);
             if (!rowCells || !Array.isArray(rowCells)) {
                 console.warn('Failed to build member row cells for preset member:', m);
                 return;
@@ -9269,11 +9219,7 @@ const loadPreset = (index) => {
                 return;
             }
 
-            const presetProfile = findPresetSectionProfile(m);
             const propertySource = presetProfile ? presetProfile.properties : null;
-
-            const sectionInfoFromPreset = presetProfile ? cloneDeep(presetProfile.sectionInfo) : parseSectionInfoFromMember(m);
-            const axisInfo = buildAxisInfo(m, sectionInfoFromPreset);
 
             if (sectionInfoFromPreset) {
                 if (axisInfo && !sectionInfoFromPreset.axis) {
@@ -9891,8 +9837,8 @@ const loadPreset = (index) => {
         }
 
         const hasDensityColumn = row.querySelector('.density-cell') !== null;
-        const sectionCellIndex = hasDensityColumn ? 9 : 8;
-        const sectionCell = row.cells[sectionCellIndex];
+        const sectionNameCellIndex = hasDensityColumn ? 9 : 8;
+        const sectionAxisCellIndex = hasDensityColumn ? 10 : 9;
 
         if (sectionInfo) {
             const enrichedInfo = ensureSectionSvgMarkup(sectionInfo);
@@ -9907,24 +9853,22 @@ const loadPreset = (index) => {
             row.dataset.sectionSource = enrichedInfo.source || '';
             applySectionAxisDataset(row, enrichedInfo.axis);
 
-            if (sectionCell) {
-                let summaryEl = sectionCell.querySelector('.selected-section-summary');
-                if (!summaryEl) {
-                    summaryEl = document.createElement('div');
-                    summaryEl.className = 'selected-section-summary';
-                    sectionCell.insertBefore(summaryEl, sectionCell.firstChild || null);
+            // 断面名称セルを更新
+            const sectionNameCell = row.cells[sectionNameCellIndex];
+            if (sectionNameCell) {
+                const nameSpan = sectionNameCell.querySelector('.section-name-cell');
+                if (nameSpan) {
+                    nameSpan.textContent = enrichedInfo.label || '-';
                 }
-                const summaryParts = [];
-                if (enrichedInfo.label) {
-                    summaryParts.push(enrichedInfo.label);
-                } else {
-                    summaryParts.push('選択済み断面');
+            }
+
+            // 軸方向セルを更新
+            const sectionAxisCell = row.cells[sectionAxisCellIndex];
+            if (sectionAxisCell) {
+                const axisSpan = sectionAxisCell.querySelector('.section-axis-cell');
+                if (axisSpan) {
+                    axisSpan.textContent = enrichedInfo.axis?.label || '-';
                 }
-                const axisLabel = row.dataset.sectionAxisLabel;
-                if (axisLabel) {
-                    summaryParts.push(axisLabel);
-                }
-                summaryEl.textContent = summaryParts.join(' / ');
             }
         } else {
             delete row.dataset.sectionInfo;
@@ -9933,9 +9877,22 @@ const loadPreset = (index) => {
             delete row.dataset.sectionSource;
             applySectionAxisDataset(row, null);
 
-            if (sectionCell) {
-                const summaryEl = sectionCell.querySelector('.selected-section-summary');
-                if (summaryEl) summaryEl.remove();
+            // 断面名称セルをクリア
+            const sectionNameCell = row.cells[sectionNameCellIndex];
+            if (sectionNameCell) {
+                const nameSpan = sectionNameCell.querySelector('.section-name-cell');
+                if (nameSpan) {
+                    nameSpan.textContent = '-';
+                }
+            }
+
+            // 軸方向セルをクリア
+            const sectionAxisCell = row.cells[sectionAxisCellIndex];
+            if (sectionAxisCell) {
+                const axisSpan = sectionAxisCell.querySelector('.section-axis-cell');
+                if (axisSpan) {
+                    axisSpan.textContent = '-';
+                }
             }
         }
     }
@@ -10095,8 +10052,38 @@ const loadPreset = (index) => {
                             updateBulkSectionInfo(data.properties);
                         }
                     } else if (data.targetMemberIndex === 'addDefaults') {
-                        // 部材追加設定のデフォルト値を更新（既に別の処理で対応済み）
-                        // このケースはlocalStorageのポーリングで処理されるため、ここでは何もしない
+                        // 新規部材追加時の処理
+                        const props = data.properties;
+                        console.log('✅ 部材追加設定(addDefaults)の断面データを受信:', props);
+
+                        // ポップアップ内の入力欄を更新
+                        document.getElementById('add-popup-i').value = props.I;
+                        document.getElementById('add-popup-a').value = props.A;
+                        document.getElementById('add-popup-z').value = props.Z;
+
+                        // デフォルト値を更新
+                        newMemberDefaults.I = props.I;
+                        newMemberDefaults.A = props.A;
+                        newMemberDefaults.Z = props.Z;
+
+                        // 断面情報（名称と軸）を保存・表示
+                        const sectionName = props.sectionName || props.sectionLabel || '';
+                        const axisLabel = props.selectedAxis || props.sectionAxisLabel || (props.sectionAxis ? props.sectionAxis.label : null) || '-';
+
+                        if (sectionName) {
+                            newMemberDefaults.sectionName = sectionName;
+                            newMemberDefaults.sectionAxis = axisLabel;
+
+                            const infoDiv = document.getElementById('add-popup-section-info');
+                            const nameSpan = document.getElementById('add-popup-section-name');
+                            const axisSpan = document.getElementById('add-popup-section-axis');
+
+                            if (infoDiv && nameSpan && axisSpan) {
+                                nameSpan.textContent = sectionName;
+                                axisSpan.textContent = axisLabel;
+                                infoDiv.style.display = 'block';
+                            }
+                        }
                     } else {
                         updateMemberProperties(data.targetMemberIndex, data.properties);
                     }
@@ -11050,8 +11037,71 @@ const initializeFrameGenerator = () => {
             const sectionBtn = newRow.querySelector('.section-select-btn');
             if (sectionBtn) {
                 sectionBtn.onclick = () => {
-                    // 断面選択機能の実装（必要に応じて）
+                    // 部材追加ポップアップ内の行用の断面選択機能
                     console.log('断面選択ボタンがクリックされました');
+
+                    // steel_selector.htmlを開く（特別な識別子を使用）
+                    const rowId = `add-temp-${nodeI}-${nodeJ}`;
+                    const url = `steel_selector.html?targetMember=${encodeURIComponent(rowId)}`;
+                    const popup = window.open(url, 'SteelSelector', 'width=1200,height=800,scrollbars=yes,resizable=yes');
+
+                    if (!popup) {
+                        alert('ポップアップブロッカーにより断面選択ツールを開けませんでした。ポップアップを許可してください。');
+                        return;
+                    }
+
+                    // ポップアップから戻った時の処理
+                    const checkPopup = setInterval(() => {
+                        if (popup.closed) {
+                            clearInterval(checkPopup);
+                            const storedData = localStorage.getItem('steelSelectionForFrameAnalyzer');
+                            if (storedData) {
+                                try {
+                                    const data = JSON.parse(storedData);
+                                    if (data.targetMemberIndex === rowId && data.properties) {
+                                        // 行内の入力フィールドを更新
+                                        const iInput = newRow.querySelector('input[placeholder="断面二次モーメント"]');
+                                        const aInput = newRow.querySelector('input[placeholder="断面積"]');
+                                        const zInput = newRow.querySelector('input[placeholder="断面係数"]');
+                                        const eInput = document.getElementById(`member-e-${nodeI}-${nodeJ}-input`);
+                                        const strengthInput = document.getElementById(`member-strength-${nodeI}-${nodeJ}-input`);
+
+                                        if (iInput) iInput.value = data.properties.I;
+                                        if (aInput) aInput.value = data.properties.A;
+                                        if (zInput) zInput.value = data.properties.Z;
+                                        if (eInput && data.properties.E) eInput.value = data.properties.E;
+                                        if (strengthInput && data.properties.strengthValue) strengthInput.value = data.properties.strengthValue;
+
+                                        // 断面情報を表示
+                                        const sectionName = data.properties.sectionName || data.properties.sectionLabel || '';
+                                        const selectedAxis = data.properties.selectedAxis || data.properties.sectionAxisLabel || '';
+
+                                        if (sectionName) {
+                                            // 断面情報表示エリアを探す
+                                            const sectionInfoCell = newRow.cells[newRow.cells.length - 3]; // 削除ボタンの2つ前
+                                            if (sectionInfoCell) {
+                                                // 既存の断面情報があれば更新、なければ作成
+                                                let infoDiv = sectionInfoCell.querySelector('.section-info-display');
+                                                if (!infoDiv) {
+                                                    infoDiv = document.createElement('div');
+                                                    infoDiv.className = 'section-info-display';
+                                                    infoDiv.style.cssText = 'font-size: 0.85em; color: #0066cc; margin-top: 4px;';
+                                                    sectionInfoCell.appendChild(infoDiv);
+                                                }
+
+                                                infoDiv.innerHTML = `<strong>${sectionName}</strong> ${selectedAxis}`;
+                                            }
+                                        }
+
+                                        localStorage.removeItem('steelSelectionForFrameAnalyzer');
+                                        console.log('✅ 部材追加行: 断面データを適用しました');
+                                    }
+                                } catch (e) {
+                                    console.error('断面選択データの解析エラー:', e);
+                                }
+                            }
+                        }
+                    }, 500);
                 };
             }
             
@@ -11610,22 +11660,28 @@ document.addEventListener('DOMContentLoaded', () => {
         return mesh;
     };
     
-    // 断面形状からTHREE.Shapeを作成（メートル単位）
-    const createSectionShape = (sectionInfo, member) => {
-        const dims = sectionInfo.rawDims;
-        const typeKey = sectionInfo.typeKey;
+// 3Dモデルの断面形状からTHREE.Shapeを作成（メートル単位）
+const createSectionShape = (sectionInfo, member) => {
+    const dims = sectionInfo.rawDims;
+    const typeKey = sectionInfo.typeKey;
 
-        if (!dims || !typeKey) return null;
+    if (!dims || !typeKey) return null;
 
-        const shape = new THREE.Shape();
+    const shape = new THREE.Shape();
 
-        // 寸法をmmからmに変換する係数
-        const MM_TO_M = 0.001;
+    // 寸法をmmからmに変換する係数
+    const MM_TO_M = 0.001;
 
-        // H形鋼、I形鋼、軽量H形鋼など
-        if (typeKey.includes('hkatakou') || typeKey.includes('ikatakou') || typeKey.includes('keiryouhkatakou')) {
+    // H形鋼、I形鋼、軽量H形鋼など
+    switch (typeKey) {
+        case 'hkatakou_hiro':
+        case 'hkatakou_naka':
+        case 'hkatakou_hoso':
+        case 'ikatakou':
+        case 'keiryouhkatakou':
+        case 'keiryourippuhkatakou': {
             const { H, B, t1, t2 } = dims;
-            if(!H || !B || !t1 || !t2) return null;
+            if (!H || !B || !t1 || !t2) return null;
 
             // 中心を原点とした形状作成（mm→m変換）
             const halfH = (H * MM_TO_M) / 2;
@@ -11633,7 +11689,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const halfT1 = (t1 * MM_TO_M) / 2;
             const t2m = t2 * MM_TO_M;
 
-            // 外形（時計回り）
+            // 外形（反時計回り）
             shape.moveTo(-halfB, halfH);
             shape.lineTo(halfB, halfH);
             shape.lineTo(halfB, halfH - t2m);
@@ -11647,13 +11703,14 @@ document.addEventListener('DOMContentLoaded', () => {
             shape.lineTo(-halfT1, halfH - t2m);
             shape.lineTo(-halfB, halfH - t2m);
             shape.lineTo(-halfB, halfH);
+            break;
         }
         // 角形鋼管
-        else if (typeKey.includes('seihoukei') || typeKey.includes('tyouhoukei')) {
+        case 'seihoukei':
+        case 'tyouhoukei': {
             const A = dims.A, B = dims.B || A, t = dims.t;
-            if(!A || !B || !t) return null;
+            if (!A || !B || !t) return null;
 
-            // 外形（中心を原点、mm→m変換）
             const halfA = (A * MM_TO_M) / 2;
             const halfB = (B * MM_TO_M) / 2;
             const tm = t * MM_TO_M;
@@ -11664,7 +11721,6 @@ document.addEventListener('DOMContentLoaded', () => {
             shape.lineTo(-halfB, halfA);
             shape.lineTo(-halfB, -halfA);
 
-            // 内側の穴（反時計回り）
             const hole = new THREE.Path();
             hole.moveTo(-halfB + tm, -halfA + tm);
             hole.lineTo(-halfB + tm, halfA - tm);
@@ -11672,77 +11728,134 @@ document.addEventListener('DOMContentLoaded', () => {
             hole.lineTo(halfB - tm, -halfA + tm);
             hole.lineTo(-halfB + tm, -halfA + tm);
             shape.holes.push(hole);
+            break;
         }
         // 円形鋼管
-        else if (typeKey.includes('koukan')) {
+        case 'koukan': {
             const { D, t } = dims;
-            if(!D || !t) return null;
+            if (!D || !t) return null;
 
-            // mm→m変換
             const Dm = D * MM_TO_M;
             const tm = t * MM_TO_M;
+            const outerRadius = Dm / 2;
+            const innerRadius = outerRadius - tm;
 
-            // 外形（反時計回り）
-            shape.absarc(0, 0, Dm / 2, 0, Math.PI * 2, false);
+            shape.absarc(0, 0, outerRadius, 0, Math.PI * 2, false);
 
-            // 内側の穴（時計回り）
             const hole = new THREE.Path();
-            hole.absarc(0, 0, Dm / 2 - tm, 0, Math.PI * 2, true);
+            hole.absarc(0, 0, innerRadius, 0, Math.PI * 2, true);
             shape.holes.push(hole);
+            break;
         }
-        // みぞ形鋼
-        else if (typeKey.includes('mizogatakou') || typeKey.includes('keimizogatakou')) {
-            const { H, B, t1, t2 } = dims;
-            if(!H || !B || !t1 || !t2) return null;
+        // ▼▼▼ ここから修正・追加 ▼▼▼
+        // みぞ形鋼、軽みぞ形鋼
+        case 'mizogatakou':
+        case 'keimizogatakou': {
+            const { H, B, t1, t2, A, t } = dims;
+            const height = H * MM_TO_M;
+            const flangeWidth = (B || A) * MM_TO_M;
+            const webThick = (t1 || t) * MM_TO_M;
+            const flangeThick = (t2 || t) * MM_TO_M;
 
-            // mm→m変換
-            const halfH = (H * MM_TO_M) / 2;
-            const halfB = (B * MM_TO_M) / 2;
-            const t1m = t1 * MM_TO_M;
-            const t2m = t2 * MM_TO_M;
+            if(!height || !flangeWidth || !webThick || !flangeThick) return null;
 
-            shape.moveTo(-halfB, halfH);
-            shape.lineTo(halfB, halfH);
-            shape.lineTo(halfB, halfH - t2m);
-            shape.lineTo(t1m, halfH - t2m);
-            shape.lineTo(t1m, -halfH + t2m);
-            shape.lineTo(halfB, -halfH + t2m);
-            shape.lineTo(halfB, -halfH);
-            shape.lineTo(-halfB, -halfH);
-            shape.lineTo(-halfB, halfH);
+            const halfH = height / 2;
+            
+            // ウェブがY軸に来るように配置
+            shape.moveTo(0, halfH);
+            shape.lineTo(flangeWidth, halfH);
+            shape.lineTo(flangeWidth, halfH - flangeThick);
+            shape.lineTo(webThick, halfH - flangeThick);
+            shape.lineTo(webThick, -halfH + flangeThick);
+            shape.lineTo(flangeWidth, -halfH + flangeThick);
+            shape.lineTo(flangeWidth, -halfH);
+            shape.lineTo(0, -halfH);
+            shape.lineTo(0, halfH);
+            break;
         }
-        // 山形鋼
-        else if (typeKey.includes('yamakatakou')) {
+        // リップみぞ形鋼
+        case 'rippumizokatakou': {
+            const { H, A, C, t } = dims;
+            if (!H || !A || !C || !t) return null;
+
+            const height = H * MM_TO_M;
+            const flangeWidth = A * MM_TO_M;
+            const lip = C * MM_TO_M;
+            const thick = t * MM_TO_M;
+            const halfH = height / 2;
+
+            shape.moveTo(0, halfH); // Top-left of web
+            shape.lineTo(flangeWidth, halfH); // Top-right of flange
+            shape.lineTo(flangeWidth, halfH - thick); // Inner corner
+            shape.lineTo(flangeWidth - lip, halfH - thick); // Lip start
+            shape.lineTo(flangeWidth - lip, halfH - thick - lip); // Lip end (This part is simplified)
+            shape.lineTo(thick, halfH - thick - lip); // This is an approximation
+            shape.lineTo(thick, -halfH + thick + lip); // Approximation
+            shape.lineTo(flangeWidth - lip, -halfH + thick + lip); // Lip start
+            shape.lineTo(flangeWidth - lip, -halfH + thick); // Lip end
+            shape.lineTo(flangeWidth, -halfH + thick); // Inner corner
+            shape.lineTo(flangeWidth, -halfH); // Bottom-right of flange
+            shape.lineTo(0, -halfH); // Bottom-left of web
+            shape.lineTo(0, halfH); // Close path
+            break;
+        }
+        // 山形鋼（等辺・不等辺）
+        case 'touhenyamakatakou':
+        case 'futouhenyamagata': {
             const { A, B, t } = dims;
-            const a = A || dims.a;
-            const b = B || A || dims.b || dims.a;
-            if(!a || !b || !t) return null;
+            const a = (A || 0) * MM_TO_M;
+            const b = (B || A || 0) * MM_TO_M; // 不等辺(B) or 等辺(A)
+            const thick = (t || 0) * MM_TO_M;
+            if (!a || !b || !thick) return null;
 
-            // mm→m変換
-            const halfA = (a * MM_TO_M) / 2;
-            const halfB = (b * MM_TO_M) / 2;
-            const tm = t * MM_TO_M;
-
-            shape.moveTo(-halfB, halfA);
-            shape.lineTo(halfB, halfA);
-            shape.lineTo(halfB, halfA - tm);
-            shape.lineTo(-halfB + tm, halfA - tm);
-            shape.lineTo(-halfB + tm, -halfA);
-            shape.lineTo(-halfB, -halfA);
-            shape.lineTo(-halfB, halfA);
+            shape.moveTo(0, a);
+            shape.lineTo(thick, a);
+            shape.lineTo(thick, thick);
+            shape.lineTo(b, thick);
+            shape.lineTo(b, 0);
+            shape.lineTo(0, 0);
+            shape.lineTo(0, a);
+            break;
         }
+        // 矩形断面（中実）
+        case '矩形':
+        case 'rectangular': {
+            const { H, B } = dims;
+            if (!H || !B) return null;
+
+            const height = H * MM_TO_M;
+            const width = B * MM_TO_M;
+            const halfH = height / 2;
+            const halfB = width / 2;
+            
+            shape.moveTo(-halfB, -halfH);
+            shape.lineTo(halfB, -halfH);
+            shape.lineTo(halfB, halfH);
+            shape.lineTo(-halfB, halfH);
+            shape.lineTo(-halfB, -halfH);
+            break;
+        }
+        // 円形断面（中実）
+        case '円形':
+        case 'circular': {
+            const { D } = dims;
+            if (!D) return null;
+            
+            const radius = (D * MM_TO_M) / 2;
+            shape.absarc(0, 0, radius, 0, Math.PI * 2, false);
+            break;
+        }
+        // ▲▲▲ ここまで修正・追加 ▲▲▲
         // その他の形状は簡易的な矩形で代替
-        else {
+        default: {
             // I, Z, Aから寸法を推定
             const I = member.I || 1000; // cm4
             const Z = member.Z || 100; // cm3
             const A = member.A || 10; // cm2
 
-            // Z = I / (H/2) より H = 2I/Z
             const h = (2 * I / Z) * 10; // cm → mm
             const b = (A * 100 / h) || h / 2; // mm
 
-            // mm→m変換
             const halfH = (h * MM_TO_M) / 2;
             const halfB = (b * MM_TO_M) / 2;
 
@@ -11751,10 +11864,11 @@ document.addEventListener('DOMContentLoaded', () => {
             shape.lineTo(halfB, halfH);
             shape.lineTo(-halfB, halfH);
             shape.lineTo(-halfB, -halfH);
+            break;
         }
-
-        return shape;
-    };
+    }
+    return shape;
+};
 
     // アニメーションループ
     const animate3D = () => {

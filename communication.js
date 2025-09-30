@@ -154,15 +154,26 @@ function sendDataToParent(properties) {
         // localStorageにデータを保存
         const serializedData = JSON.stringify(dataToSend);
         localStorage.setItem('steelSelectionForFrameAnalyzer', serializedData);
-        
-        console.log('データ送信完了:', {
+
+        console.log('✅ データ送信完了:', {
             targetMember: dataToSend.targetMemberIndex,
             propertiesCount: sanitizedPropertyKeys.length,
-            timestamp: dataToSend.timestamp
+            timestamp: dataToSend.timestamp,
+            sectionName: sanitizedProps.sectionName,
+            sectionLabel: sanitizedProps.sectionLabel,
+            selectedAxis: sanitizedProps.selectedAxis,
+            sectionAxisLabel: sanitizedProps.sectionAxisLabel
         });
-        
+
+        console.log('📦 送信データ全体:', dataToSend);
+        console.log('🔒 localStorage確認:', localStorage.getItem('steelSelectionForFrameAnalyzer'));
+
         // ウィンドウを閉じる
-        window.close();
+        setTimeout(() => {
+            console.log('⏱️ ウィンドウを閉じます');
+            window.close();
+        }, 100);
+
         return true;
         
     } catch (error) {

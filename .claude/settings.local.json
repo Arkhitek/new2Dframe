@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(start index.html)",
+      "Bash(start cmd /k \"python -m http.server 8000\")"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

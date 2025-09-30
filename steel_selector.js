@@ -1303,13 +1303,21 @@ const calculateLabelOptions = (maxDim, scale = 1) => {
     });
     
     applySelectionBtn.addEventListener('click', () => {
+        console.log('🎯 適用ボタンがクリックされました');
         const selectedRow = document.querySelector('.full-table .selected-row');
-        if (!selectedRow) { alert('テーブルから適用したい鋼材の行を選択してください。'); return; }
+        if (!selectedRow) {
+            console.warn('⚠️ 行が選択されていません');
+            alert('テーブルから適用したい鋼材の行を選択してください。');
+            return;
+        }
+        console.log('✅ 選択行:', selectedRow);
         const selectedTypeKey = document.getElementById('steel-type-select').value;
+        console.log('✅ 選択された鋼材タイプ:', selectedTypeKey);
         const steel = steelData[selectedTypeKey], rowIndex = selectedRow.dataset.index, rowData = steel.data[rowIndex];
         const normalizedHeaders = steel.headers.map(normalizeHeaderKey);
         const getProp = (...keys) => findRowValueByKeys(steel.headers, normalizedHeaders, rowData, ...keys);
         const selectedAxis = document.querySelector('#pickup-axis-selector input[name="axis-select"]:checked')?.value || 'x';
+        console.log('✅ 選択された軸:', selectedAxis);
 
         const areaValue = getProp('断面積', '面積', 'A');
         const ixValue = getProp('Ix', '強軸断面2次モーメント', 'I');
@@ -1362,18 +1370,36 @@ const calculateLabelOptions = (maxDim, scale = 1) => {
 
         props.sectionInfo = sectionInfo;
         props.sectionLabel = sectionInfo.label;
+        props.sectionName = sectionInfo.label; // 互換性のため追加
         props.sectionAxis = sectionAxisInfo;
         props.sectionAxisLabel = sectionAxisInfo.label;
         props.sectionAxisMode = sectionAxisInfo.mode;
         props.sectionAxisKey = sectionAxisInfo.key;
         props.sectionSummary = sectionInfo.dimensionSummary;
         props.sectionSource = sectionInfo.source;
+        props.selectedAxis = sectionAxisInfo.label; // 互換性のため追加
         if (targetMemberIndex !== null) {
             props.targetMemberIndex = targetMemberIndex;
         }
 
-        if (props.I !== undefined && props.A !== undefined) { sendDataToParent(props); } 
-        else { alert('性能値の取得に失敗しました。'); }
+        console.log('📋 送信準備完了 - props:', {
+            sectionName: props.sectionName,
+            sectionLabel: props.sectionLabel,
+            selectedAxis: props.selectedAxis,
+            sectionAxisLabel: props.sectionAxisLabel,
+            I: props.I,
+            A: props.A,
+            Z: props.Z,
+            targetMemberIndex: props.targetMemberIndex
+        });
+
+        if (props.I !== undefined && props.A !== undefined) {
+            console.log('✅ 必須プロパティ確認OK、sendDataToParentを呼び出します');
+            sendDataToParent(props);
+        } else {
+            console.error('❌ 必須プロパティが不足:', { I: props.I, A: props.A });
+            alert('性能値の取得に失敗しました。');
+        }
     });
 
     applyCustomBtn.addEventListener('click', () => {
@@ -1489,16 +1515,18 @@ const calculateLabelOptions = (maxDim, scale = 1) => {
         });
         props.sectionInfo = sectionInfo;
         props.sectionLabel = sectionInfo.label;
+        props.sectionName = sectionInfo.label; // 互換性のため追加
         props.sectionAxis = sectionAxisInfo;
         props.sectionAxisLabel = sectionAxisInfo.label;
         props.sectionAxisMode = sectionAxisInfo.mode;
         props.sectionAxisKey = sectionAxisInfo.key;
         props.sectionSummary = sectionInfo.dimensionSummary;
         props.sectionSource = sectionInfo.source;
+        props.selectedAxis = sectionAxisInfo.label; // 互換性のため追加
         if (targetMemberIndex !== null) {
             props.targetMemberIndex = targetMemberIndex;
         }
-        
+
         if (props.I !== undefined && props.A !== undefined) {
             sendDataToParent(props);
         } else {
