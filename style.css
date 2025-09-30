@@ -698,6 +698,18 @@ canvas {
     overflow-y: auto; /* 内容が多い場合はスクロール */
     box-sizing: border-box; /* パディングを含むサイズ計算 */
 }
+.popup-box.add-member-popup-wide {
+    width: 380px;
+}
+.section-info-display {
+    background-color: #e8f5e9;
+    border: 1px solid #4caf50;
+    border-radius: 4px;
+    padding: 8px 12px;
+    margin-bottom: 12px;
+    font-size: 13px;
+    color: #2e7d32;
+}
 .popup-box h4 { 
     margin: 0 0 10px 0; font-size: 1.1em; color: #005A9C; 
     padding: 5px 8px; border-radius: 4px; 

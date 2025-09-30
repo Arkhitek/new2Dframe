@@ -11,7 +11,7 @@
 <body>
     <div class="container">
         <header>
-            <h1>2次元フレームの構造解析＆断面算定</h1>
+            <h1>Statica 2D -2次元フレームの構造解析＆断面算定-</h1>
         </header>
 
         <main>
@@ -253,6 +253,8 @@
                                     <th>断面積 A (cm²)</th>
                                     <th class="section-check-item">断面係数 Z (cm³)</th>
                                     <th class="density-column" style="display: none;">密度 ρ (kg/m³)</th>
+                                    <th>断面名称</th>
+                                    <th>軸方向</th>
                                     <th>部材断面選択</th>
                                     <th>始端</th>
                                     <th>終端</th>
@@ -422,9 +424,13 @@
         </div>
     </div>
 
-    <div id="add-member-popup" class="popup-box">
+    <div id="add-member-popup" class="popup-box add-member-popup-wide">
         <h4>部材追加設定</h4>
         <p style="font-size: 13px; margin-top: -5px; margin-bottom: 15px;">キャンバス上で追加する部材の物性値を設定します。</p>
+        <div id="add-popup-section-info" class="section-info-display" style="display: none;">
+            <strong>選択断面:</strong> <span id="add-popup-section-name">-</span>
+            (<span id="add-popup-section-axis">-</span>)
+        </div>
         <div class="props-grid">
             <label for="add-popup-e-container">E (N/mm²)</label>
             <div id="add-popup-e-container"></div>
@@ -448,6 +454,7 @@
             </select>
         </div>
         <div class="popup-buttons">
+            <button id="add-popup-select-section">断面選択...</button>
             <button id="add-popup-cancel">キャンセル</button>
             <button id="add-popup-ok">OK</button>
         </div>

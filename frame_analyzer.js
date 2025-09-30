@@ -6430,12 +6430,28 @@ document.addEventListener('DOMContentLoaded', () => {
         zoom(zoomFactor, mouseX, mouseY);
     }, { passive: false });
     
+    // 断面選択ツールを開く関数
+    const openSteelSelector = (memberIndex, options = {}) => {
+        const url = `steel_selector.html?targetMember=${memberIndex}`;
+        const popup = window.open(url, 'SteelSelector', 'width=1200,height=800,scrollbars=yes,resizable=yes');
+
+        if (!popup) {
+            alert('ポップアップブロッカーにより断面選択ツールを開けませんでした。ポップアップを許可してください。');
+            return;
+        }
+
+        // 必要に応じてオプション情報をlocalStorageに保存
+        if (options && Object.keys(options).length > 0) {
+            sessionStorage.setItem('steelSelectorOptions', JSON.stringify(options));
+        }
+    };
+
     elements.membersTable.addEventListener('click', (e) => {
     if (e.target && e.target.classList.contains('select-props-btn')) {
         const row = e.target.closest('tr');
         if (row) {
             const memberIndex = Array.from(row.parentNode.children).indexOf(row);
-            
+
             // 材料情報を取得して渡す
             const eSelect = row.cells[3].querySelector('select');
             const selectedOption = eSelect.options[eSelect.selectedIndex];
@@ -6449,7 +6465,7 @@ document.addEventListener('DOMContentLoaded', () => {
             let strengthValue = '';
             if (strengthInputContainer.querySelector('input')) strengthValue = strengthInputContainer.querySelector('input').value;
             if (strengthInputContainer.querySelector('select')) strengthValue = strengthInputContainer.querySelector('select').value;
-            
+
             openSteelSelector(memberIndex, {
                 material: materialType,
                 E: eSelect.value === 'custom' ? row.cells[3].querySelector('input[type="number"]').value : eSelect.value,
@@ -6532,18 +6548,97 @@ document.addEventListener('DOMContentLoaded', () => {
         popup.style.top = `${top}px`;
         popup.style.position = 'fixed';
     };
+    // 部材追加設定の断面選択ボタン
+    document.getElementById('add-popup-select-section').onclick = () => {
+        const url = `steel_selector.html?targetMember=addDefaults`;
+        const popup = window.open(url, 'SteelSelector', 'width=1200,height=800,scrollbars=yes,resizable=yes');
+
+        if (!popup) {
+            alert('ポップアップブロッカーにより断面選択ツールを開けませんでした。ポップアップを許可してください。');
+            return;
+        }
+
+        // ポップアップから戻った時の処理
+        const checkPopup = setInterval(() => {
+            if (popup.closed) {
+                clearInterval(checkPopup);
+                const storedData = localStorage.getItem('steelSelectionForFrameAnalyzer');
+                console.log('🔍 部材追加設定: localStorageデータ取得:', storedData);
+                if (storedData) {
+                    try {
+                        const data = JSON.parse(storedData);
+                        console.log('🔍 部材追加設定: パースされたデータ:', data);
+                        console.log('🔍 部材追加設定: targetMemberIndex:', data.targetMemberIndex);
+                        console.log('🔍 部材追加設定: properties:', data.properties);
+
+                        if (data.targetMemberIndex === 'addDefaults' && data.properties) {
+                            // 部材追加設定のデフォルト値を更新
+                            document.getElementById('add-popup-i').value = data.properties.I;
+                            document.getElementById('add-popup-a').value = data.properties.A;
+                            document.getElementById('add-popup-z').value = data.properties.Z;
+
+                            // デフォルト値も更新
+                            newMemberDefaults.I = data.properties.I;
+                            newMemberDefaults.A = data.properties.A;
+                            newMemberDefaults.Z = data.properties.Z;
+
+                            // 断面名称と軸方向を保存・表示
+                            const sectionName = data.properties.sectionName || data.properties.sectionLabel || '';
+                            const axisLabel = data.properties.sectionAxisLabel || (data.properties.sectionAxis ? data.properties.sectionAxis.label : null) || '-';
+
+                            console.log('🔍 部材追加設定: 断面名称:', sectionName);
+                            console.log('🔍 部材追加設定: 軸方向:', axisLabel);
+
+                            if (sectionName) {
+                                newMemberDefaults.sectionName = sectionName;
+                                newMemberDefaults.sectionAxis = axisLabel;
+
+                                // 表示要素を更新
+                                const infoDiv = document.getElementById('add-popup-section-info');
+                                const nameSpan = document.getElementById('add-popup-section-name');
+                                const axisSpan = document.getElementById('add-popup-section-axis');
+
+                                console.log('🔍 部材追加設定: 表示要素:', { infoDiv, nameSpan, axisSpan });
+
+                                if (infoDiv && nameSpan && axisSpan) {
+                                    nameSpan.textContent = sectionName;
+                                    axisSpan.textContent = axisLabel;
+                                    infoDiv.style.display = 'block';
+                                    console.log('✅ 部材追加設定: 断面情報を表示しました');
+                                }
+                            } else {
+                                console.warn('⚠️ 部材追加設定: 断面名称が空です');
+                            }
+
+                            localStorage.removeItem('steelSelectionForFrameAnalyzer');
+                        } else {
+                            console.warn('⚠️ 部材追加設定: 条件不一致', {
+                                targetMatch: data.targetMemberIndex === 'addDefaults',
+                                hasProperties: !!data.properties
+                            });
+                        }
+                    } catch (e) {
+                        console.error('断面選択データの解析エラー:', e);
+                    }
+                } else {
+                    console.warn('⚠️ 部材追加設定: localStorageにデータがありません');
+                }
+            }
+        }, 500);
+    };
+
     document.getElementById('add-popup-ok').onclick = () => {
         const e_select = document.getElementById('add-popup-e-select'), e_input = document.getElementById('add-popup-e-input');
         if (e_select && e_input) {
             newMemberDefaults.E = e_select.value === 'custom' ? e_input.value : e_select.value;
         }
-        
+
         // F値の取得 - 強度コンテナから現在のUIに応じて値を取得
         const fContainer = document.getElementById('add-popup-f-container');
         if (fContainer && fContainer.firstElementChild) {
             const strengthContainer = fContainer.firstElementChild;
             const strengthType = strengthContainer.dataset?.strengthType;
-            
+
             if (strengthType === 'wood-type') {
                 // 木材の場合 - プリセット値または カスタム値を取得
                 const presetSelect = strengthContainer.querySelector('select');
@@ -6555,7 +6650,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         const fcInput = strengthContainer.querySelector('input[id*="-fc"]');
                         const fbInput = strengthContainer.querySelector('input[id*="-fb"]');
                         const fsInput = strengthContainer.querySelector('input[id*="-fs"]');
-                        
+
                         if (ftInput && fcInput && fbInput && fsInput) {
                             newMemberDefaults.F = {
                                 baseStrengths: {
@@ -6583,19 +6678,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
         }
-        
+
         const iInput = document.getElementById('add-popup-i');
         const aInput = document.getElementById('add-popup-a');
         const zInput = document.getElementById('add-popup-z');
         const iConnSelect = document.getElementById('add-popup-i-conn');
         const jConnSelect = document.getElementById('add-popup-j-conn');
-        
+
         if (iInput) newMemberDefaults.I = iInput.value;
         if (aInput) newMemberDefaults.A = aInput.value;
         if (zInput) newMemberDefaults.Z = zInput.value;
         if (iConnSelect) newMemberDefaults.i_conn = iConnSelect.value;
         if (jConnSelect) newMemberDefaults.j_conn = jConnSelect.value;
-        
+
         elements.addMemberPopup.style.display = 'none';
         setCanvasMode('addMember');
     };
@@ -6850,12 +6945,14 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (canvasMode === 'addMember') { 
             if (clickedNodeIndex !== -1) { 
                 if (firstMemberNode === null) { firstMemberNode = clickedNodeIndex; } 
-                else { 
-                    if (firstMemberNode !== clickedNodeIndex) { 
+                else {
+                    if (firstMemberNode !== clickedNodeIndex) {
                         const I_m4 = parseFloat(newMemberDefaults.I)*1e-8, A_m2 = parseFloat(newMemberDefaults.A)*1e-4, Z_m3 = parseFloat(newMemberDefaults.Z)*1e-6;
-                        addRow(elements.membersTable, [`#`, ...memberRowHTML(firstMemberNode+1, clickedNodeIndex+1, newMemberDefaults.E, newMemberDefaults.F, I_m4, A_m2, Z_m3, newMemberDefaults.i_conn, newMemberDefaults.j_conn)]); 
-                    } 
-                    firstMemberNode = null; 
+                        const sectionName = newMemberDefaults.sectionName || '';
+                        const sectionAxis = newMemberDefaults.sectionAxis || '';
+                        addRow(elements.membersTable, [`#`, ...memberRowHTML(firstMemberNode+1, clickedNodeIndex+1, newMemberDefaults.E, newMemberDefaults.F, I_m4, A_m2, Z_m3, newMemberDefaults.i_conn, newMemberDefaults.j_conn, sectionName, sectionAxis)]);
+                    }
+                    firstMemberNode = null;
                 } 
                 drawOnCanvas(); 
             } 
@@ -7970,7 +8067,7 @@ const createEInputHTML = (idPrefix, currentE = '205000') => {
         return html;
     };
 
-    const memberRowHTML = (i, j, E = '205000', F='235', I = 1.84e-5, A = 2.34e-3, Z = 1.23e-3, i_conn = 'rigid', j_conn = 'rigid') => {
+    const memberRowHTML = (i, j, E = '205000', F='235', I = 1.84e-5, A = 2.34e-3, Z = 1.23e-3, i_conn = 'rigid', j_conn = 'rigid', sectionName = '', sectionAxis = '') => {
         const baseColumns = [
             `<input type="number" value="${i}">`,
             `<input type="number" value="${j}">`,
@@ -7980,22 +8077,26 @@ const createEInputHTML = (idPrefix, currentE = '205000') => {
             `<input type="number" value="${(A * 1e4).toFixed(2)}" title="断面積 A (cm²)">`,
             `<input type="number" value="${(Z * 1e6).toFixed(2)}" title="断面係数 Z (cm³)">`
         ];
-        
+
         // 自重考慮チェックボックスがオンの場合、密度列を追加
         // プリセット読み込み中は密度列の表示状態に関係なく追加しない
-        const shouldAddDensity = !window.isLoadingPreset && 
-                                elements.considerSelfWeightCheckbox && 
+        const shouldAddDensity = !window.isLoadingPreset &&
+                                elements.considerSelfWeightCheckbox &&
                                 elements.considerSelfWeightCheckbox.checked;
-        
+
         if (shouldAddDensity) {
             const density = MATERIAL_DENSITY_DATA[E] || MATERIAL_DENSITY_DATA['custom'];
             baseColumns.push(createDensityInputHTML(`member-density-${i}-${j}`, density));
         }
-        
+
+        // 断面名称と軸方向の列を追加
+        baseColumns.push(`<span class="section-name-cell">${sectionName || '-'}</span>`);
+        baseColumns.push(`<span class="section-axis-cell">${sectionAxis || '-'}</span>`);
+
         // 接続条件列を追加
         baseColumns.push(`<select><option value="rigid" ${i_conn === 'rigid' ? 'selected' : ''}>剛</option><option value="pinned" ${i_conn === 'pinned' || i_conn === 'p' ? 'selected' : ''}>ピン</option></select>`);
         baseColumns.push(`<select><option value="rigid" ${j_conn === 'rigid' ? 'selected' : ''}>剛</option><option value="pinned" ${j_conn === 'pinned' || j_conn === 'p' ? 'selected' : ''}>ピン</option></select>`);
-        
+
         return baseColumns;
     };
     
@@ -9904,6 +10005,33 @@ const loadPreset = (index) => {
                 if (modulusInputEl && props.Z !== undefined && props.Z !== null) {
                     modulusInputEl.value = props.Z;
                 }
+
+                // 断面名称と軸方向のセルを更新（密度列の有無を考慮）
+                const hasDensityColumn = row.querySelector('.density-cell') !== null;
+                const sectionNameCellIndex = hasDensityColumn ? 9 : 8;
+                const sectionAxisCellIndex = hasDensityColumn ? 10 : 9;
+
+                const sectionNameCell = row.cells[sectionNameCellIndex];
+                const sectionAxisCell = row.cells[sectionAxisCellIndex];
+
+                // sectionNameまたはsectionLabelを取得
+                const displaySectionName = props.sectionName || props.sectionLabel || '';
+                // axisまたはsectionAxisLabelを取得
+                const displayAxisLabel = props.sectionAxisLabel || (props.sectionAxis ? props.sectionAxis.label : null) || props.axis || '';
+
+                if (sectionNameCell) {
+                    const sectionNameSpan = sectionNameCell.querySelector('.section-name-cell');
+                    if (sectionNameSpan && displaySectionName) {
+                        sectionNameSpan.textContent = displaySectionName;
+                    }
+                }
+
+                if (sectionAxisCell) {
+                    const sectionAxisSpan = sectionAxisCell.querySelector('.section-axis-cell');
+                    if (sectionAxisSpan && displayAxisLabel) {
+                        sectionAxisSpan.textContent = displayAxisLabel;
+                    }
+                }
             }
 
             const normalizeAxisFromProps = () => {
@@ -9966,6 +10094,9 @@ const loadPreset = (index) => {
                         if (typeof updateBulkSectionInfo === 'function') {
                             updateBulkSectionInfo(data.properties);
                         }
+                    } else if (data.targetMemberIndex === 'addDefaults') {
+                        // 部材追加設定のデフォルト値を更新（既に別の処理で対応済み）
+                        // このケースはlocalStorageのポーリングで処理されるため、ここでは何もしない
                     } else {
                         updateMemberProperties(data.targetMemberIndex, data.properties);
                     }

@@ -100,6 +100,7 @@ function sendDataToParent(properties) {
                 const trimmed = value.trim();
                 if (!trimmed) return null;
                 if (trimmed.toLowerCase() === 'bulk') return 'bulk';
+                if (trimmed.toLowerCase() === 'adddefaults') return 'addDefaults';
                 const numeric = parseInt(trimmed, 10);
                 return Number.isNaN(numeric) ? null : numeric;
             }
@@ -146,7 +147,7 @@ function sendDataToParent(properties) {
         if (typeof dataToSend.targetMemberIndex === 'number' && !Number.isFinite(dataToSend.targetMemberIndex)) {
             throw new Error('部材インデックスが数値ではありません');
         }
-        if (typeof dataToSend.targetMemberIndex !== 'number' && dataToSend.targetMemberIndex !== 'bulk') {
+        if (typeof dataToSend.targetMemberIndex !== 'number' && dataToSend.targetMemberIndex !== 'bulk' && dataToSend.targetMemberIndex !== 'addDefaults') {
             throw new Error('部材インデックスが数値ではありません');
         }
         
