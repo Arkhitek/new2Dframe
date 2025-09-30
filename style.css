@@ -2289,14 +2289,13 @@ canvas:hover {
    企業ロゴ
    ========================================================================== */
 
-/* ヘッダーに相対配置を設定 */
+/* ヘッダーロゴ（右上） */
 header {
     position: relative;
     margin-bottom: var(--spacing-xl);
 }
 
-/* 企業ロゴスタイル */
-.company-logo {
+.company-logo-header {
     position: absolute;
     top: 0;
     right: 0;
@@ -2306,31 +2305,69 @@ header {
     display: block;
 }
 
-.company-logo:hover {
+.company-logo-header:hover {
     transform: scale(1.05);
     opacity: 0.9;
 }
 
-.company-logo img {
+.company-logo-header img {
     height: 60px;
+    width: auto;
+    display: block;
+}
+
+/* フッターロゴ（下端中央） */
+.app-footer {
+    text-align: center;
+    padding: var(--spacing-xl) 0;
+    margin-top: 40px;
+    border-top: 1px solid var(--color-border);
+}
+
+.company-logo-footer {
+    display: inline-block;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+    text-decoration: none;
+}
+
+.company-logo-footer:hover {
+    transform: scale(1.05);
+    opacity: 0.9;
+}
+
+.company-logo-footer img {
+    height: 80px;
     width: auto;
     display: block;
 }
 
 /* レスポンシブ対応 */
 @media (max-width: 768px) {
-    .company-logo img {
+    .company-logo-header img {
         height: 45px;
+    }
+
+    .company-logo-footer img {
+        height: 60px;
+    }
+
+    .app-footer {
+        padding: var(--spacing-lg) 0;
+        margin-top: 30px;
     }
 }
 
 @media (max-width: 480px) {
-    .company-logo {
-        top: -5px;
-        right: -5px;
+    .company-logo-header img {
+        height: 35px;
     }
 
-    .company-logo img {
-        height: 35px;
+    .company-logo-footer img {
+        height: 50px;
+    }
+
+    .app-footer {
+        padding: var(--spacing-md) 0;
+        margin-top: 20px;
     }
 }
