@@ -3,8 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>2次元フレームの構造解析＆断面算定</title>
+    <title>Statica 2D -2次元フレームの構造解析＆断面算定-</title>
     <link rel="stylesheet" href="style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 </head>
 <body>
     <div class="container">
@@ -117,7 +119,7 @@
                 <div class="model-controls">
                     <button id="auto-scale-btn" class="auto-scale-btn" title="描画範囲をモデル図の大きさに合わせて自動スケーリング (ショートカット: A)">🔍 自動スケーリング</button>
                     <button id="reset-model-btn" class="reset-btn" title="モデル情報を全て消去します">🔄 モデルリセット</button>
-                    
+                    <button id="view-3d-btn" title="3Dでモデルを表示">3Dビューア</button>
                     <div class="display-controls" style="margin-top: 10px; display: flex; gap: 15px; font-size: 14px;">
                         <label style="display: flex; align-items: center; cursor: pointer;">
                             <input type="checkbox" id="show-external-loads" checked style="margin-right: 5px;">
@@ -526,7 +528,14 @@
             </div>
         </div>
     </div>
-
+    <div id="modal-3d-viewer" class="modal-3d hidden">
+        <div class="modal-3d-content">
+            <span class="modal-3d-close">&times;</span>
+            <h3>簡易3Dビューア</h3>
+            <div id="canvas-3d-container"></div>
+            <p class="modal-3d-note">マウス操作: 左ドラッグで回転、右ドラッグで平行移動、ホイールでズーム</p>
+        </div>
+    </div>
     <script src="frame_analyzer.js"></script>
     <script src="communication.js"></script>
 </body>

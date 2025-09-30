@@ -4029,7 +4029,28 @@ document.addEventListener('DOMContentLoaded', () => {
             else if (i_conn === 'pinned' && j_conn === 'rigid') k_local = [[EAL,0,0,-EAL,0,0],[0,3*EIL3,0,0,-3*EIL3,3*EIL2],[0,0,0,0,0,0],[-EAL,0,0,EAL,0,0],[0,-3*EIL3,0,0,3*EIL3,-3*EIL2],[0,3*EIL2,0,0,-3*EIL2,3*EIL]];
             else if (i_conn === 'rigid' && j_conn === 'pinned') k_local = [[EAL,0,0,-EAL,0,0],[0,3*EIL3,3*EIL2,0,-3*EIL3,0],[0,3*EIL2,3*EIL,0,-3*EIL2,0],[-EAL,0,0,EAL,0,0],[0,-3*EIL3,-3*EIL2,0,3*EIL3,0],[0,0,0,0,0,0]];
             else k_local = [[EAL,0,0,-EAL,0,0],[0,0,0,0,0,0],[0,0,0,0,0,0],[-EAL,0,0,EAL,0,0],[0,0,0,0,0,0],[0,0,0,0,0,0]];
-            return { i,j,E,strengthProps,I,A,Z,Zx,Zy,ix,iy,length:L,c,s,T,i_conn,j_conn,k_local,material };
+
+            // 断面情報を取得（3Dビューア用）
+            let sectionInfo = null;
+            let sectionAxis = null;
+            if (row.dataset.sectionInfo) {
+                try {
+                    sectionInfo = JSON.parse(decodeURIComponent(row.dataset.sectionInfo));
+                } catch (error) {
+                    console.warn(`部材 ${index + 1}: 断面情報のパースに失敗`, error);
+                }
+            }
+
+            // 軸情報を取得（3つの個別属性から構築）
+            if (row.dataset.sectionAxisKey || row.dataset.sectionAxisMode || row.dataset.sectionAxisLabel) {
+                sectionAxis = {
+                    key: row.dataset.sectionAxisKey,
+                    mode: row.dataset.sectionAxisMode,
+                    label: row.dataset.sectionAxisLabel
+                };
+            }
+
+            return { i,j,E,strengthProps,I,A,Z,Zx,Zy,ix,iy,length:L,c,s,T,i_conn,j_conn,k_local,material,sectionInfo,sectionAxis };
         });
         const nodeLoads = Array.from(elements.nodeLoadsTable.rows).map((r, i) => { const n = parseInt(r.cells[0].querySelector('input').value) - 1; if (n < 0 || n >= nodes.length) throw new Error(`節点荷重 ${i+1} の節点番号が不正です。`); return { nodeIndex:n, px:parseFloat(r.cells[1].querySelector('input').value)||0, py:parseFloat(r.cells[2].querySelector('input').value)||0, mz:parseFloat(r.cells[3].querySelector('input').value)||0 }; });
         const memberLoads = Array.from(elements.memberLoadsTable.rows).map((r, i) => { const m = parseInt(r.cells[0].querySelector('input').value) - 1; if (m < 0 || m >= members.length) throw new Error(`部材荷重 ${i+1} の部材番号が不正です。`); return { memberIndex:m, w:parseFloat(r.cells[1].querySelector('input').value)||0 }; });
@@ -11186,3 +11207,451 @@ window.checkFrameGenerator = () => {
         console.log(`${id}: ${element ? '見つかりました' : '見つかりません'}`);
     });
 };
+
+// ========================================
+// 簡易3Dビューア機能
+// ========================================
+document.addEventListener('DOMContentLoaded', () => {
+    // Three.jsのロード確認
+    if (typeof THREE === 'undefined') {
+        console.warn('Three.jsライブラリが読み込まれていません。3Dビューア機能は無効です。');
+        return;
+    }
+
+    const view3dBtn = document.getElementById('view-3d-btn');
+    const modal = document.getElementById('modal-3d-viewer');
+
+    if (!view3dBtn || !modal) {
+        console.warn('3Dビューア要素が見つかりません');
+        return;
+    }
+
+    const closeBtn = modal.querySelector('.modal-3d-close');
+    const canvasContainer = document.getElementById('canvas-3d-container');
+
+    let scene, camera, renderer, controls, animationFrameId;
+
+    // 3Dビューアを開く
+    const open3DViewer = () => {
+        try {
+            console.log('3Dビューアを開く処理開始');
+            const { nodes, members } = parseInputs();
+            console.log('parseInputsの結果:', { nodeCount: nodes.length, memberCount: members.length });
+
+            if (nodes.length === 0 || members.length === 0) {
+                alert('3D表示するモデルがありません。');
+                return;
+            }
+
+            // 部材の断面情報を確認
+            const membersWithSection = members.filter(m => m.sectionInfo && m.sectionInfo.rawDims);
+            console.log('断面情報を持つ部材数:', membersWithSection.length);
+            console.log('部材サンプル:', members[0]);
+
+            modal.classList.remove('hidden');
+            modal.style.display = 'flex';
+            console.log('モーダルを表示');
+
+            init3DScene(nodes, members);
+        } catch (error) {
+            console.error('3Dビューアの初期化に失敗しました:', error);
+            alert('3Dビューアの表示に失敗しました: ' + error.message);
+        }
+    };
+
+    // 3Dビューアを閉じる
+    const close3DViewer = () => {
+        modal.classList.add('hidden');
+        modal.style.display = 'none';
+
+        // アニメーションループを停止し、リソースを解放
+        if (animationFrameId) {
+            cancelAnimationFrame(animationFrameId);
+        }
+        if (renderer) {
+            renderer.dispose();
+            renderer.forceContextLoss();
+            const gl = renderer.domElement.getContext('webgl');
+            if (gl && gl.getExtension('WEBGL_lose_context')) {
+                gl.getExtension('WEBGL_lose_context').loseContext();
+            }
+            if (canvasContainer.contains(renderer.domElement)) {
+                 canvasContainer.removeChild(renderer.domElement);
+            }
+            renderer = null;
+        }
+        scene = null;
+        camera = null;
+        controls = null;
+    };
+
+    // 3Dシーンの初期化とモデル構築
+    const init3DScene = (nodes, members) => {
+        console.log('init3DScene開始');
+
+        // シーン
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xf0f0f0);
+        console.log('シーン作成完了');
+
+        // カメラ
+        const aspect = canvasContainer.clientWidth / canvasContainer.clientHeight;
+        console.log('コンテナサイズ:', { width: canvasContainer.clientWidth, height: canvasContainer.clientHeight, aspect });
+        camera = new THREE.PerspectiveCamera(75, aspect, 0.1, 1000);
+        camera.position.set(0, 0, 30); // 初期位置
+        console.log('カメラ作成完了');
+
+        // レンダラー（既存のcanvasをクリア）
+        canvasContainer.innerHTML = '';
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(canvasContainer.clientWidth, canvasContainer.clientHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        canvasContainer.appendChild(renderer.domElement);
+        console.log('レンダラー作成完了');
+
+        // コントロール
+        controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        console.log('コントロール作成完了');
+
+        // ライト
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(50, 50, 50);
+        scene.add(directionalLight);
+
+        // モデルの構築
+        build3DModel(scene, nodes, members);
+
+        // アニメーション開始
+        animate3D();
+    };
+
+    // 3Dモデルを構築
+    const build3DModel = (scene, nodes, members) => {
+        console.log('build3DModel開始', { nodeCount: nodes.length, memberCount: members.length });
+        const memberGroup = new THREE.Group();
+        const nodeMaterial = new THREE.MeshLambertMaterial({ color: 0x1565C0 });
+        const nodeGeometry = new THREE.SphereGeometry(0.2, 16, 16);
+
+        // 節点を描画
+        nodes.forEach((node, i) => {
+            const nodeMesh = new THREE.Mesh(nodeGeometry, nodeMaterial);
+            nodeMesh.position.set(node.x, node.y, 0);
+            memberGroup.add(nodeMesh);
+        });
+        console.log('節点描画完了:', nodes.length);
+
+        // 部材を描画
+        let successCount = 0;
+        members.forEach((member, index) => {
+            try {
+                const memberMesh = createMemberMesh(member, nodes);
+                if (memberMesh) {
+                    memberGroup.add(memberMesh);
+                    successCount++;
+                }
+            } catch(e) {
+                console.warn(`部材 ${member.i+1}-${member.j+1} の3Dメッシュ作成に失敗しました:`, e);
+            }
+        });
+        console.log(`部材描画完了: ${successCount}/${members.length}`);
+
+        scene.add(memberGroup);
+        console.log('メンバーグループをシーンに追加');
+
+        // モデル全体が収まるようにカメラを調整
+        const box = new THREE.Box3().setFromObject(memberGroup);
+        console.log('バウンディングボックス:', box);
+        const center = box.getCenter(new THREE.Vector3());
+        const size = box.getSize(new THREE.Vector3());
+        console.log('モデル中心:', center, 'サイズ:', size);
+        const maxDim = Math.max(size.x, size.y, size.z);
+        console.log('最大次元:', maxDim);
+
+        if (!isFinite(maxDim) || maxDim === 0) {
+            console.warn('モデルのサイズが不正です。デフォルトカメラ位置を使用します。');
+            camera.position.set(0, 0, 50);
+            controls.target.set(0, 0, 0);
+        } else {
+            const fov = camera.fov * (Math.PI / 180);
+            let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
+            cameraZ *= 1.5; // 少し余裕を持たせる
+            console.log('計算されたカメラZ距離:', cameraZ);
+
+            camera.position.set(center.x, center.y, center.z + cameraZ);
+            controls.target.copy(center);
+        }
+        controls.update();
+        console.log('カメラ最終位置:', camera.position, 'ターゲット:', controls.target);
+    };
+
+    // 部材の3Dメッシュを作成
+    const createMemberMesh = (member, nodes) => {
+        // 節点座標を取得
+        const nodeI = nodes[member.i];
+        const nodeJ = nodes[member.j];
+
+        if (!nodeI || !nodeJ) {
+            console.warn('部材の節点が見つかりません。', member);
+            return null;
+        }
+
+        const p1 = new THREE.Vector3(nodeI.x, nodeI.y, 0);
+        const p2 = new THREE.Vector3(nodeJ.x, nodeJ.y, 0);
+
+        // 部材の長さを計算（メートル単位）
+        const memberLength = p1.distanceTo(p2);
+        if (memberLength <= 0) {
+            console.warn('部材の長さが0です。', member);
+            return null;
+        }
+
+        // 断面情報がない場合、I, Z, Aから推定した簡易断面を作成
+        if (!member.sectionInfo || !member.sectionInfo.rawDims) {
+            const I = member.I || 1000; // cm4
+            const Z = member.Z || 1000; // cm3
+            const A = member.A || 100; // cm2
+
+            // Z = I / (H/2) より H = 2I/Z
+            const h = (2 * I / Z) * 10; // cm → mm
+            const b = (A * 100 / h) || h / 2; // mm
+
+            member.sectionInfo = {
+                rawDims: { H: h, B: b, t1: b/10, t2: h/10 },
+                typeKey: 'estimated',
+                label: '推定断面'
+            };
+        }
+
+        // 断面形状を作成（メートル単位に変換）
+        const shape = createSectionShape(member.sectionInfo, member);
+        if (!shape) return null; // 形状が作れなければスキップ
+
+        // 押し出し設定：部材長さ（すでにメートル単位）
+        const extrudeSettings = {
+            steps: 1,
+            depth: memberLength,
+            bevelEnabled: false,
+        };
+
+        const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+        const material = new THREE.MeshLambertMaterial({ color: 0x607D8B, wireframe: false });
+        const mesh = new THREE.Mesh(geometry, material);
+        
+        // 部材方向ベクトル
+        const direction = new THREE.Vector3().subVectors(p2, p1).normalize();
+        // 部材の種類を判定
+        const isVertical = Math.abs(direction.y) > 0.95; // 垂直部材（柱）の判定閾値を少し厳しく
+
+        // メッシュを始点に配置
+        mesh.position.copy(p1);
+
+        // ★★★ 修正箇所 ★★★
+        // 部材の向きに応じて「上方向」を切り替える
+        if (isVertical) {
+            // 垂直部材（柱）の場合、断面が正面を向くようにX軸を仮の「上」とする
+            mesh.up.set(1, 0, 0);
+        } else {
+            // 水平・斜め部材（梁）の場合、断面が天を向くようにY軸を「上」とする
+            mesh.up.set(0, 1, 0);
+        }
+        // ★★★ ここまで ★★★
+
+        // 終点(p2)の方向を向くようにメッシュを回転させる
+        mesh.lookAt(p2);
+        
+        // 強軸・弱軸の向きを反映
+        // lookAtで基本の向きが決まった後、ユーザーの指定に応じて90度回転させる
+        if (isVertical) {
+            // 垂直部材（柱）: 弱軸指定時に90度回転させる
+            if (member.sectionAxis && member.sectionAxis.key === 'y') {
+                mesh.rotateZ(Math.PI / 2);
+            }
+        } else {
+            // 水平部材・斜め部材: 弱軸指定時に90度回転させる
+            if (member.sectionAxis && member.sectionAxis.key === 'y') {
+                mesh.rotateZ(Math.PI / 2);
+            }
+        }
+
+        return mesh;
+    };
+    
+    // 断面形状からTHREE.Shapeを作成（メートル単位）
+    const createSectionShape = (sectionInfo, member) => {
+        const dims = sectionInfo.rawDims;
+        const typeKey = sectionInfo.typeKey;
+
+        if (!dims || !typeKey) return null;
+
+        const shape = new THREE.Shape();
+
+        // 寸法をmmからmに変換する係数
+        const MM_TO_M = 0.001;
+
+        // H形鋼、I形鋼、軽量H形鋼など
+        if (typeKey.includes('hkatakou') || typeKey.includes('ikatakou') || typeKey.includes('keiryouhkatakou')) {
+            const { H, B, t1, t2 } = dims;
+            if(!H || !B || !t1 || !t2) return null;
+
+            // 中心を原点とした形状作成（mm→m変換）
+            const halfH = (H * MM_TO_M) / 2;
+            const halfB = (B * MM_TO_M) / 2;
+            const halfT1 = (t1 * MM_TO_M) / 2;
+            const t2m = t2 * MM_TO_M;
+
+            // 外形（時計回り）
+            shape.moveTo(-halfB, halfH);
+            shape.lineTo(halfB, halfH);
+            shape.lineTo(halfB, halfH - t2m);
+            shape.lineTo(halfT1, halfH - t2m);
+            shape.lineTo(halfT1, -halfH + t2m);
+            shape.lineTo(halfB, -halfH + t2m);
+            shape.lineTo(halfB, -halfH);
+            shape.lineTo(-halfB, -halfH);
+            shape.lineTo(-halfB, -halfH + t2m);
+            shape.lineTo(-halfT1, -halfH + t2m);
+            shape.lineTo(-halfT1, halfH - t2m);
+            shape.lineTo(-halfB, halfH - t2m);
+            shape.lineTo(-halfB, halfH);
+        }
+        // 角形鋼管
+        else if (typeKey.includes('seihoukei') || typeKey.includes('tyouhoukei')) {
+            const A = dims.A, B = dims.B || A, t = dims.t;
+            if(!A || !B || !t) return null;
+
+            // 外形（中心を原点、mm→m変換）
+            const halfA = (A * MM_TO_M) / 2;
+            const halfB = (B * MM_TO_M) / 2;
+            const tm = t * MM_TO_M;
+
+            shape.moveTo(-halfB, -halfA);
+            shape.lineTo(halfB, -halfA);
+            shape.lineTo(halfB, halfA);
+            shape.lineTo(-halfB, halfA);
+            shape.lineTo(-halfB, -halfA);
+
+            // 内側の穴（反時計回り）
+            const hole = new THREE.Path();
+            hole.moveTo(-halfB + tm, -halfA + tm);
+            hole.lineTo(-halfB + tm, halfA - tm);
+            hole.lineTo(halfB - tm, halfA - tm);
+            hole.lineTo(halfB - tm, -halfA + tm);
+            hole.lineTo(-halfB + tm, -halfA + tm);
+            shape.holes.push(hole);
+        }
+        // 円形鋼管
+        else if (typeKey.includes('koukan')) {
+            const { D, t } = dims;
+            if(!D || !t) return null;
+
+            // mm→m変換
+            const Dm = D * MM_TO_M;
+            const tm = t * MM_TO_M;
+
+            // 外形（反時計回り）
+            shape.absarc(0, 0, Dm / 2, 0, Math.PI * 2, false);
+
+            // 内側の穴（時計回り）
+            const hole = new THREE.Path();
+            hole.absarc(0, 0, Dm / 2 - tm, 0, Math.PI * 2, true);
+            shape.holes.push(hole);
+        }
+        // みぞ形鋼
+        else if (typeKey.includes('mizogatakou') || typeKey.includes('keimizogatakou')) {
+            const { H, B, t1, t2 } = dims;
+            if(!H || !B || !t1 || !t2) return null;
+
+            // mm→m変換
+            const halfH = (H * MM_TO_M) / 2;
+            const halfB = (B * MM_TO_M) / 2;
+            const t1m = t1 * MM_TO_M;
+            const t2m = t2 * MM_TO_M;
+
+            shape.moveTo(-halfB, halfH);
+            shape.lineTo(halfB, halfH);
+            shape.lineTo(halfB, halfH - t2m);
+            shape.lineTo(t1m, halfH - t2m);
+            shape.lineTo(t1m, -halfH + t2m);
+            shape.lineTo(halfB, -halfH + t2m);
+            shape.lineTo(halfB, -halfH);
+            shape.lineTo(-halfB, -halfH);
+            shape.lineTo(-halfB, halfH);
+        }
+        // 山形鋼
+        else if (typeKey.includes('yamakatakou')) {
+            const { A, B, t } = dims;
+            const a = A || dims.a;
+            const b = B || A || dims.b || dims.a;
+            if(!a || !b || !t) return null;
+
+            // mm→m変換
+            const halfA = (a * MM_TO_M) / 2;
+            const halfB = (b * MM_TO_M) / 2;
+            const tm = t * MM_TO_M;
+
+            shape.moveTo(-halfB, halfA);
+            shape.lineTo(halfB, halfA);
+            shape.lineTo(halfB, halfA - tm);
+            shape.lineTo(-halfB + tm, halfA - tm);
+            shape.lineTo(-halfB + tm, -halfA);
+            shape.lineTo(-halfB, -halfA);
+            shape.lineTo(-halfB, halfA);
+        }
+        // その他の形状は簡易的な矩形で代替
+        else {
+            // I, Z, Aから寸法を推定
+            const I = member.I || 1000; // cm4
+            const Z = member.Z || 100; // cm3
+            const A = member.A || 10; // cm2
+
+            // Z = I / (H/2) より H = 2I/Z
+            const h = (2 * I / Z) * 10; // cm → mm
+            const b = (A * 100 / h) || h / 2; // mm
+
+            // mm→m変換
+            const halfH = (h * MM_TO_M) / 2;
+            const halfB = (b * MM_TO_M) / 2;
+
+            shape.moveTo(-halfB, -halfH);
+            shape.lineTo(halfB, -halfH);
+            shape.lineTo(halfB, halfH);
+            shape.lineTo(-halfB, halfH);
+            shape.lineTo(-halfB, -halfH);
+        }
+
+        return shape;
+    };
+
+    // アニメーションループ
+    const animate3D = () => {
+        animationFrameId = requestAnimationFrame(animate3D);
+        controls.update();
+        renderer.render(scene, camera);
+    };
+
+    // ウィンドウリサイズ対応
+    const onWindowResize = () => {
+        if (renderer && camera) {
+            camera.aspect = canvasContainer.clientWidth / canvasContainer.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(canvasContainer.clientWidth, canvasContainer.clientHeight);
+        }
+    };
+
+    // イベントリスナー設定
+    if (view3dBtn) {
+        view3dBtn.addEventListener('click', open3DViewer);
+    }
+    if (closeBtn) {
+        closeBtn.addEventListener('click', close3DViewer);
+    }
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            close3DViewer();
+        }
+    });
+    window.addEventListener('resize', onWindowResize);
+});
