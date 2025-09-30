@@ -2233,3 +2233,104 @@ canvas:hover {
     background-color: #f8f9fa;
     border-radius: var(--border-radius-small);
 }
+
+/* --- 伸縮可能な入力テーブル --- */
+/* 主要な入力テーブルの高さを垂直方向にリサイズ可能にします */
+.input-section .grid-inputs .table-container,
+.input-section > div > .table-container {
+    resize: vertical;      /* 垂直方向のリサイズを有効にする */
+    overflow: auto;        /* 内容がはみ出した場合にスクロールバーを表示 */
+    height: 220px;         /* 初期状態の高さ */
+    min-height: 120px;     /* 伸縮可能な最小の高さ */
+    max-height: 70vh;      /* 伸縮可能な最大の高さ（ビューポートの70%） */
+    border: 1px solid var(--color-border); /* リサイズ可能な領域を示す枠線 */
+    padding: 10px;         /* コンテナの内側の余白 */
+    background-color: #fdfdfd; /* コンテナの背景色 */
+}
+
+/* === 共有リンク機能のスタイル === */
+#create-share-link-btn {
+    background-color: #17a2b8;
+    border-color: #138496;
+}
+#create-share-link-btn:hover {
+    background-color: #138496;
+}
+#copy-share-link-btn {
+    background-color: #28a745;
+    border-color: #218838;
+}
+#copy-share-link-btn:hover {
+    background-color: #218838;
+}
+
+/* --- オンキャンバス直接編集用のスタイル --- */
+.on-canvas-editor {
+    position: absolute;
+    z-index: 1001; /* キャンバスより手前、ポップアップより奥に表示 */
+    padding: 2px 4px;
+    border: 2px solid var(--color-primary);
+    background-color: #f0f8ff;
+    font-size: 14px;
+    font-family: var(--font-family-primary);
+    text-align: center;
+    border-radius: var(--border-radius-small);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    /* テキストの中心に配置するための調整 */
+    transform: translate(-50%, -50%);
+}
+
+.on-canvas-editor:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(0, 90, 156, 0.3);
+}
+
+/* ==========================================================================
+   企業ロゴ
+   ========================================================================== */
+
+/* ヘッダーに相対配置を設定 */
+header {
+    position: relative;
+    margin-bottom: var(--spacing-xl);
+}
+
+/* 企業ロゴスタイル */
+.company-logo {
+    position: absolute;
+    top: 0;
+    right: 0;
+    z-index: 1000;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+    text-decoration: none;
+    display: block;
+}
+
+.company-logo:hover {
+    transform: scale(1.05);
+    opacity: 0.9;
+}
+
+.company-logo img {
+    height: 60px;
+    width: auto;
+    display: block;
+}
+
+/* レスポンシブ対応 */
+@media (max-width: 768px) {
+    .company-logo img {
+        height: 45px;
+    }
+}
+
+@media (max-width: 480px) {
+    .company-logo {
+        top: -5px;
+        right: -5px;
+    }
+
+    .company-logo img {
+        height: 35px;
+    }
+}

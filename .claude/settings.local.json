@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(start index.html)",
-      "Bash(start cmd /k \"python -m http.server 8000\")"
+      "Bash(start cmd /k \"python -m http.server 8000\")",
+      "Bash(git restore:*)"
     ],
     "deny": [],
     "ask": []
