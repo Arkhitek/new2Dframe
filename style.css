@@ -2371,3 +2371,19 @@ header {
         margin-top: 20px;
     }
 }
+
+/* === 共有リンク機能のスタイル === */
+#create-share-link-btn {
+    background-color: #17a2b8;
+    border-color: #138496;
+}
+#create-share-link-btn:hover {
+    background-color: #138496;
+}
+#copy-share-link-btn {
+    background-color: #28a745;
+    border-color: #218838;
+}
+#copy-share-link-btn:hover {
+    background-color: #218838;
+}

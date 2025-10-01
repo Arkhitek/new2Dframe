@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Statica 2D -2次元フレームの構造解析＆断面算定-</title>
     <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 </head>
@@ -180,6 +181,7 @@
                     <div>
                         <button id="save-btn" title="入力データを保存 (ショートカット: Ctrl+S)">入力保存</button>
                         <button id="load-btn" title="入力データを読込 (ショートカット: Ctrl+O)">入力読込</button>
+                        <button id="create-share-link-btn" title="モデル共有用のリンクを作成">共有リンク作成</button>
                     </div>
                 </div>
 
@@ -550,6 +552,21 @@
             <h3>簡易3Dビューア</h3>
             <div id="canvas-3d-container"></div>
             <p class="modal-3d-note">マウス操作: 左ドラッグで回転、右ドラッグで平行移動、ホイールでズーム</p>
+        </div>
+    </div>
+    <div id="share-link-modal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 600px; height: auto; animation: slideIn 0.3s ease;">
+            <div class="modal-header">
+                <h3>モデル共有リンク</h3>
+                <span id="share-link-modal-close" class="modal-close">&times;</span>
+            </div>
+            <div class="modal-body">
+                <p>以下のリンクをコピーして共有してください。リンクを開くと現在のモデルが再現されます。</p>
+                <textarea id="share-link-textarea" rows="4" style="width: 100%; resize: none; font-family: monospace; padding: 8px; border: 1px solid #ccc; border-radius: 4px; margin-top: 10px;"></textarea>
+            </div>
+            <div class="modal-footer">
+                <button id="copy-share-link-btn" class="generate-btn">リンクをコピー</button>
+            </div>
         </div>
     </div>
     <script src="frame_analyzer.js"></script>

@@ -9593,6 +9593,116 @@ const loadPreset = (index) => {
     elements.saveBtn.addEventListener('click', saveInputData);
     elements.loadBtn.addEventListener('click', loadInputData);
     
+    // ==========================================================================
+    // モデル共有リンク機能
+    // ==========================================================================
+    const createShareLinkBtn = document.getElementById('create-share-link-btn');
+    const shareLinkModal = document.getElementById('share-link-modal');
+    const shareLinkModalClose = document.getElementById('share-link-modal-close');
+    const shareLinkTextarea = document.getElementById('share-link-textarea');
+    const copyShareLinkBtn = document.getElementById('copy-share-link-btn');
+
+    // URLセーフなBase64エンコード関数
+    function toBase64Url(u8) {
+        return btoa(String.fromCharCode.apply(null, u8))
+            .replace(/\+/g, '-')
+            .replace(/\//g, '_')
+            .replace(/=/g, '');
+    }
+
+    // URLセーフなBase64デコード関数
+    function fromBase64Url(str) {
+        str = str.replace(/-/g, '+').replace(/_/g, '/');
+        while (str.length % 4) {
+            str += '=';
+        }
+        const decoded = atob(str);
+        const u8 = new Uint8Array(decoded.length);
+        for (let i = 0; i < decoded.length; ++i) {
+            u8[i] = decoded.charCodeAt(i);
+        }
+        return u8;
+    }
+
+    // 共有リンクを生成する関数
+    const generateShareLink = () => {
+        try {
+            const state = getCurrentState();
+            const jsonString = JSON.stringify(state);
+            const compressed = pako.deflate(jsonString);
+            const encodedData = toBase64Url(compressed);
+            const baseUrl = window.location.href.split('#')[0];
+            const shareUrl = `${baseUrl}#model=${encodedData}`;
+
+            shareLinkTextarea.value = shareUrl;
+            shareLinkModal.style.display = 'flex';
+        } catch (error) {
+            console.error("共有リンクの生成に失敗しました:", error);
+            alert("共有リンクの生成に失敗しました。");
+        }
+    };
+
+    // 共有リンクからモデルを読み込む関数
+    const loadFromShareLink = () => {
+        try {
+            if (window.location.hash && window.location.hash.startsWith('#model=')) {
+                console.log("共有リンクからモデルを読み込みます...");
+                const encodedData = window.location.hash.substring(7);
+                if (!encodedData) return;
+
+                const compressed = fromBase64Url(encodedData);
+                const jsonString = pako.inflate(compressed, { to: 'string' });
+                const state = JSON.parse(jsonString);
+                
+                if (state && state.nodes) {
+                    historyStack = [];
+                    elements.nodesTable.innerHTML = '';
+                    elements.membersTable.innerHTML = '';
+                    elements.nodeLoadsTable.innerHTML = '';
+                    elements.memberLoadsTable.innerHTML = '';
+                    clearResults();
+
+                    restoreState(state);
+                    runFullAnalysis();
+                    console.log("モデルの読み込みが完了しました。");
+                    
+                    history.replaceState(null, document.title, window.location.pathname + window.location.search);
+                }
+            }
+        } catch (error) {
+            console.error("共有リンクからのモデル読み込みに失敗しました:", error);
+            alert("共有リンクからのモデル読み込みに失敗しました。リンクが破損している可能性があります。");
+        }
+    };
+
+    // 共有モーダルのイベントリスナー
+    if (createShareLinkBtn) {
+        createShareLinkBtn.addEventListener('click', generateShareLink);
+    }
+    if (shareLinkModalClose) {
+        shareLinkModalClose.addEventListener('click', () => shareLinkModal.style.display = 'none');
+    }
+    if (shareLinkModal) {
+        shareLinkModal.addEventListener('click', (e) => {
+            if (e.target === shareLinkModal) {
+                shareLinkModal.style.display = 'none';
+            }
+        });
+    }
+    if (copyShareLinkBtn) {
+        copyShareLinkBtn.addEventListener('click', () => {
+            shareLinkTextarea.select();
+            document.execCommand('copy');
+            copyShareLinkBtn.textContent = 'コピーしました！';
+            setTimeout(() => {
+                copyShareLinkBtn.textContent = 'リンクをコピー';
+            }, 2000);
+        });
+    }
+
+    // ページ読み込み時に共有リンクをチェック
+    loadFromShareLink();
+    
     // エクセル出力ボタンのイベントリスナー追加（エラーチェック付き）
     if (elements.exportExcelBtn) {
         console.log('エクセル出力ボタンにイベントリスナーを追加しています...');
