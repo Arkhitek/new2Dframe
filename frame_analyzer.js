@@ -3160,7 +3160,10 @@ document.addEventListener('DOMContentLoaded', () => {
             state.nodes.push({
                 x: row.cells[1].querySelector('input').value,
                 y: row.cells[2].querySelector('input').value,
-                support: row.cells[3].querySelector('select').value
+                support: row.cells[3].querySelector('select').value,
+                dx_forced: row.cells[4]?.querySelector('input')?.value || 0,
+                dy_forced: row.cells[5]?.querySelector('input')?.value || 0,
+                r_forced: row.cells[6]?.querySelector('input')?.value || 0
             });
         });
         Array.from(elements.membersTable.rows).forEach(row => {
@@ -3316,7 +3319,7 @@ document.addEventListener('DOMContentLoaded', () => {
             elements.memberLoadsTable.innerHTML = '';
             
             // 節点復元
-            state.nodes.forEach(n => addRow(elements.nodesTable, [`#`, `<input type="number" value="${n.x}">`, `<input type="number" value="${n.y}">`, `<select><option value="free"${n.support==='free'?' selected':''}>自由</option><option value="pinned"${n.support==='pinned'?' selected':''}>ピン</option><option value="fixed"${n.support==='fixed'?' selected':''}>固定</option><option value="roller"${n.support==='roller'?' selected':''}>ローラー</option></select>`], false));
+            state.nodes.forEach(n => addRow(elements.nodesTable, [`#`, `<input type="number" value="${n.x}">`, `<input type="number" value="${n.y}">`, `<select><option value="free"${n.support==='free'?' selected':''}>自由</option><option value="pinned"${n.support==='pinned'?' selected':''}>ピン</option><option value="fixed"${n.support==='fixed'?' selected':''}>固定</option><option value="roller"${n.support==='roller'?' selected':''}>ローラー</option></select>`, `<input type="number" value="${n.dx_forced || 0}" step="0.1">`, `<input type="number" value="${n.dy_forced || 0}" step="0.1">`, `<input type="number" value="${n.r_forced || 0}" step="0.001">`], false));
             
             // 部材復元
             state.members.forEach(m => {
@@ -3835,30 +3838,102 @@ document.addEventListener('DOMContentLoaded', () => {
                 const indices = [i*3, i*3+1, i*3+2, j*3, j*3+1, j*3+2];
                 for (let row = 0; row < 6; row++) for (let col = 0; col < 6; col++) K_global[indices[row]][indices[col]] += k_global_member[row][col];
             });
-            const constraints = [];
+            // ==========================================================
+            // 強制変位を考慮した解析ロジック（自由節点も対応）
+            // ==========================================================
+
+            // 1. 物理的な支点による拘束自由度を定義
+            const support_constraints = new Set();
             nodes.forEach((node, i) => {
-                if (node.support === 'fixed') constraints.push(i*3, i*3+1, i*3+2);
-                if (node.support === 'pinned') constraints.push(i*3, i*3+1);
-                if (node.support === 'roller') constraints.push(i*3+1);
+                if (node.support === 'fixed') {
+                    support_constraints.add(i * 3);
+                    support_constraints.add(i * 3 + 1);
+                    support_constraints.add(i * 3 + 2);
+                } else if (node.support === 'pinned') {
+                    support_constraints.add(i * 3);
+                    support_constraints.add(i * 3 + 1);
+                } else if (node.support === 'roller') {
+                    support_constraints.add(i * 3 + 1);
+                }
             });
-            const reduced_indices = [...Array(dof).keys()].filter(i => !constraints.includes(i));
-            if (reduced_indices.length === 0) {
-                const D_global = mat.create(dof, 1), R = mat.multiply(F_global, [[-1]]);
-                const memberForces = members.map((member, idx) => { const fel = fixedEndForces[idx] || [0,0,0,0,0,0]; return { N_i: fel[0], Q_i: fel[1], M_i: fel[2], N_j: fel[3], Q_j: fel[4], M_j: fel[5] }; });
+
+            // 2. 強制変位が与えられた自由度を特定し、既知変位ベクトルD_sを作成
+            const D_s = mat.create(dof, 1);
+            const forced_disp_constraints = new Set();
+            nodes.forEach((node, i) => {
+                if (Math.abs(node.dx_forced) > 1e-9) {
+                    D_s[i * 3][0] = node.dx_forced;
+                    forced_disp_constraints.add(i * 3);
+                }
+                if (Math.abs(node.dy_forced) > 1e-9) {
+                    D_s[i * 3 + 1][0] = node.dy_forced;
+                    forced_disp_constraints.add(i * 3 + 1);
+                }
+                if (Math.abs(node.r_forced) > 1e-9) {
+                    D_s[i * 3 + 2][0] = node.r_forced;
+                    forced_disp_constraints.add(i * 3 + 2);
+                }
+            });
+
+            // 3. 物理支点と強制変位を合算し、最終的な「拘束自由度」と「自由度」を決定
+            const constrained_indices_set = new Set([...support_constraints, ...forced_disp_constraints]);
+            const constrained_indices = Array.from(constrained_indices_set).sort((a, b) => a - b);
+            const free_indices = [...Array(dof).keys()].filter(i => !constrained_indices_set.has(i));
+
+            if (free_indices.length === 0) { // 完全拘束モデルの場合
+                const D_global = D_s;
+                const R = mat.subtract(mat.multiply(K_global, D_global), F_global);
+                const memberForces = members.map((member, idx) => {
+                    const { T, k_local, i, j } = member;
+                    const d_global_member = [ ...D_global.slice(i * 3, i * 3 + 3), ...D_global.slice(j * 3, j * 3 + 3) ];
+                    const d_local = mat.multiply(T, d_global_member);
+                    let f_local = mat.multiply(k_local, d_local);
+                    if(fixedEndForces[idx]) { const fel_mat = fixedEndForces[idx].map(v=>[v]); f_local = mat.add(f_local, fel_mat); }
+                    return { N_i: f_local[0][0], Q_i: f_local[1][0], M_i: f_local[2][0], N_j: f_local[3][0], Q_j: f_local[4][0], M_j: f_local[5][0] };
+                });
                 displayResults(D_global, R, memberForces, nodes, members, nodeLoads, memberLoads);
                 return;
             }
-            const K_reduced = mat.create(reduced_indices.length, reduced_indices.length), F_reduced = mat.create(reduced_indices.length, 1);
-            reduced_indices.forEach((r_idx, i) => { F_reduced[i][0] = F_global[r_idx][0]; reduced_indices.forEach((c_idx, j) => { K_reduced[i][j] = K_global[r_idx][c_idx]; }); });
-            const D_reduced = mat.solve(K_reduced, F_reduced);
-            if (!D_reduced) {
-                // 不安定構造の詳細分析を実行
-                const instabilityAnalysis = analyzeInstability(K_global, reduced_indices, nodes, members);
+
+            // 3. 行列を分割 (K_ff, K_fs, K_sf, K_ss)
+            const K_ff = free_indices.map(r => free_indices.map(c => K_global[r][c]));
+            const K_fs = free_indices.map(r => constrained_indices.map(c => K_global[r][c]));
+            const K_sf = constrained_indices.map(r => free_indices.map(c => K_global[r][c]));
+            const K_ss = constrained_indices.map(r => constrained_indices.map(c => K_global[r][c]));
+
+            // 4. ベクトルを分割
+            const F_f = free_indices.map(idx => [F_global[idx][0]]);
+            const F_s = constrained_indices.map(idx => [F_global[idx][0]]);
+            const D_s_constrained = constrained_indices.map(idx => [D_s[idx][0]]);
+
+            // 5. 強制変位による等価節点力を計算し、荷重ベクトルを修正
+            // F_modified = F_f - K_fs * D_s_constrained
+            const Kfs_Ds = mat.multiply(K_fs, D_s_constrained);
+            const F_modified = mat.subtract(F_f, Kfs_Ds);
+
+            // 6. 未知変位 D_f を解く
+            const D_f = mat.solve(K_ff, F_modified);
+            if (!D_f) {
+                const instabilityAnalysis = analyzeInstability(K_global, free_indices, nodes, members);
                 throw new Error(`解を求めることができませんでした。構造が不安定であるか、拘束が不適切である可能性があります。\n${instabilityAnalysis.message}`);
             }
+
+            // 7. 全体変位ベクトル D_global を組み立てる
             const D_global = mat.create(dof, 1);
-            reduced_indices.forEach((val, i) => { D_global[val][0] = D_reduced[i][0]; });
-            const R = mat.subtract(mat.multiply(K_global, D_global), F_global);
+            free_indices.forEach((val, i) => { D_global[val][0] = D_f[i][0]; });
+            constrained_indices.forEach((val, i) => { D_global[val][0] = D_s_constrained[i][0]; });
+
+            // 8. 反力 R を計算
+            // R = K_sf * D_f + K_ss * D_s_constrained - F_s
+            const Ksf_Df = mat.multiply(K_sf, D_f);
+            const Kss_Ds = mat.multiply(K_ss, D_s_constrained);
+            let R_constrained = mat.add(Ksf_Df, Kss_Ds);
+            R_constrained = mat.subtract(R_constrained, F_s);
+
+            const R = mat.create(dof, 1);
+            constrained_indices.forEach((val, i) => { R[val][0] = R_constrained[i][0]; });
+
+            // ==========================================================
             const memberForces = members.map((member, idx) => {
                 const { T, k_local, i, j } = member;
                 const d_global_member = [ ...D_global.slice(i * 3, i * 3 + 3), ...D_global.slice(j * 3, j * 3 + 3) ];
@@ -3923,16 +3998,25 @@ document.addEventListener('DOMContentLoaded', () => {
             const xInput = row.cells[1]?.querySelector('input');
             const yInput = row.cells[2]?.querySelector('input');
             const supportSelect = row.cells[3]?.querySelector('select');
-            
+
             if (!xInput || !yInput || !supportSelect) {
                 throw new Error(`節点 ${i + 1}: 入力フィールドが見つかりません`);
             }
-            
+
+            // 強制変位の読み取りを追加
+            const dx_forced_mm = parseFloat(row.cells[4]?.querySelector('input')?.value) || 0;
+            const dy_forced_mm = parseFloat(row.cells[5]?.querySelector('input')?.value) || 0;
+            const r_forced_rad = parseFloat(row.cells[6]?.querySelector('input')?.value) || 0;
+
             return {
                 id: i + 1,
                 x: parseFloat(xInput.value),
                 y: parseFloat(yInput.value),
-                support: supportSelect.value
+                support: supportSelect.value,
+                // 強制変位を基本単位(m, rad)で格納
+                dx_forced: dx_forced_mm / 1000,
+                dy_forced: dy_forced_mm / 1000,
+                r_forced: r_forced_rad
             };
         });
         const members = Array.from(elements.membersTable.rows).map((row, index) => {
@@ -9372,7 +9456,7 @@ const loadPreset = (index) => {
         elements.membersTable.innerHTML = '';
         elements.nodeLoadsTable.innerHTML = '';
         elements.memberLoadsTable.innerHTML = '';
-        p.nodes.forEach(n => addRow(elements.nodesTable, [`#`, `<input type="number" value="${n.x}">`, `<input type="number" value="${n.y}">`, `<select><option value="free"${n.s==='f'?' selected':''}>自由</option><option value="pinned"${n.s==='p'?' selected':''}>ピン</option><option value="fixed"${n.s==='x'?' selected':''}>固定</option><option value="roller"${n.s==='r'?' selected':''}>ローラー</option></select>`], false));
+        p.nodes.forEach(n => addRow(elements.nodesTable, [`#`, `<input type="number" value="${n.x}">`, `<input type="number" value="${n.y}">`, `<select><option value="free"${n.s==='f'?' selected':''}>自由</option><option value="pinned"${n.s==='p'?' selected':''}>ピン</option><option value="fixed"${n.s==='x'?' selected':''}>固定</option><option value="roller"${n.s==='r'?' selected':''}>ローラー</option></select>`, `<input type="number" value="0" step="0.1">`, `<input type="number" value="0" step="0.1">`, `<input type="number" value="0" step="0.001">`], false));
         p.members.forEach(m => {
             const E_N_mm2 = m.E || '205000';
             const F_N_mm2 = m.F || '235';
@@ -9485,7 +9569,7 @@ const loadPreset = (index) => {
             newX = maxX + parseFloat(elements.gridSpacing.value);
             newY = nodeAtMaxX.y;
         }
-        addRow(elements.nodesTable, [`#`, `<input type="number" value="${newX.toFixed(2)}">`, `<input type="number" value="${newY.toFixed(2)}">`, `<select><option value="free">自由</option><option value="pinned">ピン</option><option value="fixed">固定</option><option value="roller">ローラー</option></select>`]);
+        addRow(elements.nodesTable, [`#`, `<input type="number" value="${newX.toFixed(2)}">`, `<input type="number" value="${newY.toFixed(2)}">`, `<select><option value="free">自由</option><option value="pinned">ピン</option><option value="fixed">固定</option><option value="roller">ローラー</option></select>`, `<input type="number" value="0" step="0.1">`, `<input type="number" value="0" step="0.1">`, `<input type="number" value="0" step="0.001">`]);
     };
     elements.addMemberBtn.onclick = () => {
         const nodeCount = elements.nodesTable.rows.length;
