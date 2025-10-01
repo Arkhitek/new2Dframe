@@ -1533,6 +1533,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // デバッグ: エクセル出力ボタンの存在確認
     console.log('エクセル出力ボタンの要素:', elements.exportExcelBtn);
     console.log('ボタンが存在するか:', !!elements.exportExcelBtn);
+    
+    // デバッグ: 重要なポップアップ要素の存在確認
+    console.log('🔍 ポップアップ要素チェック:', {
+        memberPropsPopup: !!elements.memberPropsPopup,
+        nodeLoadPopup: !!elements.nodeLoadPopup,
+        nodeCoordsPopup: !!elements.nodeCoordsPopup
+    });
 
     let panZoomState = { scale: 1, offsetX: 0, offsetY: 0, isInitialized: false };
     let lastResults = null;
@@ -1576,6 +1583,21 @@ document.addEventListener('DOMContentLoaded', () => {
     let historyStack = [];
     const resolutionScale = 2.0;
     let newMemberDefaults = { E: '205000', F: '235', I: '18400', A: '2340', Z: '1230', i_conn: 'rigid', j_conn: 'rigid' };
+    
+    // ポップアップの初期化（確実に非表示にする）
+    if (elements.memberPropsPopup) {
+        elements.memberPropsPopup.style.display = 'none';
+        console.log('✅ memberPropsPopup初期化完了 (非表示設定)');
+    }
+    if (elements.nodeLoadPopup) {
+        elements.nodeLoadPopup.style.display = 'none';
+    }
+    if (elements.nodeCoordsPopup) {
+        elements.nodeCoordsPopup.style.display = 'none';
+    }
+    if (elements.addMemberPopup) {
+        elements.addMemberPopup.style.display = 'none';
+    }
     
     // ツールチップ表示の状態管理
     let hoveredMember = null;
@@ -7283,12 +7305,27 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // ポップアップの位置を動的に再調整する関数
     function adjustPopupPosition(popup, targetBounds = null) {
-        if (!popup || popup.style.display === 'none') return;
+        console.log('📐 adjustPopupPosition呼び出し:', {
+            popup: popup?.id,
+            display: popup?.style.display,
+            targetBounds: targetBounds
+        });
+        
+        if (!popup || popup.style.display === 'none') {
+            console.log('❌ ポップアップが非表示または存在しません');
+            return;
+        }
         
         // 現在のポップアップサイズを取得
         const popupRect = popup.getBoundingClientRect();
         const popupWidth = popupRect.width;
         const popupHeight = popupRect.height;
+        
+        console.log('📏 ポップアップサイズ:', {
+            width: popupWidth,
+            height: popupHeight,
+            currentRect: popupRect
+        });
         const windowWidth = window.innerWidth;
         
         // 実際に利用可能な画面高さを取得（タスクバーなどを除く）
@@ -7356,8 +7393,28 @@ document.addEventListener('DOMContentLoaded', () => {
         left = Math.max(minMargin, Math.min(left, windowWidth - popupWidth - minMargin));
         top = Math.max(minMargin, Math.min(top, availableHeight - popupHeight - bottomMargin));
         
+        console.log('✅ ポップアップ最終位置:', {
+            left: left,
+            top: top,
+            windowWidth: windowWidth,
+            availableHeight: availableHeight,
+            popupDisplay: popup.style.display
+        });
+        
+        // position: fixedを明示的に設定
+        popup.style.position = 'fixed';
         popup.style.left = `${left}px`;
         popup.style.top = `${top}px`;
+        popup.style.zIndex = '10000'; // 非常に高いz-indexを設定
+        
+        console.log('🎯 ポップアップ位置設定完了:', {
+            styleLeft: popup.style.left,
+            styleTop: popup.style.top,
+            styleDisplay: popup.style.display,
+            stylePosition: popup.style.position,
+            styleZIndex: popup.style.zIndex,
+            boundingRect: popup.getBoundingClientRect()
+        });
     }
     
     // ポップアップのドラッグ機能を追加する関数
@@ -11093,8 +11150,12 @@ const loadPreset = (index) => {
     };
 
     elements.modelCanvas.addEventListener('dblclick', (e) => {
+        console.log('🖱️ ダブルクリックイベント発生');
+        
         // 他のポップアップが表示されている場合は何もしない
-        if (document.querySelector('.popup-box[style*="display: block"]')) {
+        const existingPopup = document.querySelector('.popup-box[style*="display: block"]');
+        if (existingPopup) {
+            console.log('❌ ポップアップが既に表示されているため処理を停止:', existingPopup);
             return;
         }
 
@@ -11102,13 +11163,204 @@ const loadPreset = (index) => {
         const mouseX = e.clientX - rect.left;
         const mouseY = e.clientY - rect.top;
 
-        // labelManagerはdrawOnCanvas内で生成されるため、グローバルからアクセス
+        // まず荷重ラベルのクリックをチェック
+        let labelClicked = false;
         if (window.lastLabelManager) {
             const clickedLabel = window.lastLabelManager.getLabelAt(mouseX, mouseY);
             if (clickedLabel && clickedLabel.type && clickedLabel.index !== undefined) {
                 e.preventDefault();
                 e.stopPropagation();
                 showInPlaceEditor(clickedLabel);
+                labelClicked = true;
+            }
+        }
+
+        // 荷重ラベルがクリックされていない場合、節点または部材をチェック
+        if (!labelClicked) {
+            const clickedNodeIndex = getNodeAt(mouseX, mouseY);
+            const clickedMemberIndex = getMemberAt(mouseX, mouseY);
+            
+            console.log('🔍 ダブルクリック要素チェック:', {
+                mouseX, mouseY, 
+                clickedNodeIndex, 
+                clickedMemberIndex,
+                labelClicked
+            });
+
+            if (clickedNodeIndex !== -1) {
+                // 節点の座標編集ポップアップを表示
+                e.preventDefault();
+                e.stopPropagation();
+                selectedNodeIndex = clickedNodeIndex;
+                window.selectedNodeIndex = clickedNodeIndex;
+
+                const nodeRow = elements.nodesTable.rows[clickedNodeIndex];
+                document.getElementById('popup-x').value = nodeRow.cells[1].querySelector('input').value;
+                document.getElementById('popup-y').value = nodeRow.cells[2].querySelector('input').value;
+
+                // ポップアップを画面中央に表示
+                const popup = elements.nodeCoordsPopup;
+                popup.style.display = 'block';
+
+                const popupRect = popup.getBoundingClientRect();
+                const windowWidth = window.innerWidth;
+                const windowHeight = window.innerHeight;
+
+                const left = Math.max(0, (windowWidth - popupRect.width) / 2);
+                const top = Math.max(0, (windowHeight - popupRect.height) / 2);
+
+                popup.style.left = `${left}px`;
+                popup.style.top = `${top}px`;
+                popup.style.position = 'fixed';
+
+                drawOnCanvas();
+            } else if (clickedMemberIndex !== -1) {
+                // 部材のプロパティ編集ポップアップを表示
+                console.log('🔧 部材ダブルクリック処理開始:', {
+                    clickedMemberIndex,
+                    selectedMemberIndex
+                });
+                
+                e.preventDefault();
+                e.stopPropagation();
+                selectedMemberIndex = clickedMemberIndex;
+                window.selectedMemberIndex = clickedMemberIndex;
+
+                // 右クリックメニューの「menu-edit-member」をクリックした時と同じ処理を実行
+                // この処理は行7025-7180付近にある
+                const memberRow = elements.membersTable.rows[selectedMemberIndex];
+                console.log('📋 部材行データ:', {
+                    memberRow: memberRow,
+                    rowExists: !!memberRow,
+                    selectedMemberIndex: selectedMemberIndex,
+                    totalRows: elements.membersTable.rows.length
+                });
+                
+                if (!memberRow) {
+                    console.error('❌ 部材行が見つかりません');
+                    return;
+                }
+                const e_select = memberRow.cells[3].querySelector('select');
+                const e_input = memberRow.cells[3].querySelector('input[type="number"]');
+                const currentE = (e_select.value === 'custom') ? e_input.value : e_select.value;
+
+                // ポップアップ内のE入力欄を生成
+                const eContainer = document.getElementById('popup-e-container');
+                eContainer.innerHTML = createEInputHTML('popup-e', currentE);
+
+                // 現在の材料タイプと基準強度を取得
+                const strengthContainer = memberRow.cells[4].firstElementChild;
+                if (!strengthContainer) {
+                    console.error('強度入力コンテナが見つかりません');
+                    return;
+                }
+                const strengthType = strengthContainer.dataset.strengthType;
+                let currentStrength;
+                if (strengthType === 'wood-type') {
+                    const presetSelect = strengthContainer.querySelector('select');
+                    if (presetSelect.value === 'custom') {
+                        currentStrength = { baseStrengths: {} };
+                        ['ft', 'fc', 'fb', 'fs'].forEach(key => {
+                            currentStrength.baseStrengths[key] = parseFloat(strengthContainer.querySelector(`input[id*="-${key}"]`).value);
+                        });
+                    } else {
+                        currentStrength = presetSelect.value;
+                    }
+                } else {
+                    currentStrength = strengthContainer.querySelector('input').value;
+                }
+
+                const popupFContainer = document.getElementById('popup-f-container');
+                const selectedOption = e_select.options[e_select.selectedIndex];
+                let materialType = 'steel';
+                if (selectedOption.textContent.includes('木材')) materialType = 'wood';
+                else if (selectedOption.textContent.includes('ステンレス')) materialType = 'stainless';
+                else if (selectedOption.textContent.includes('アルミニウム')) materialType = 'aluminum';
+
+                // ポップアップ内のF入力欄を生成
+                popupFContainer.innerHTML = '';
+                popupFContainer.appendChild(createStrengthInputHTML(materialType, 'popup-f', currentStrength));
+
+                // その他のプロパティを設定
+                document.getElementById('popup-i').value = memberRow.cells[5].querySelector('input').value;
+                document.getElementById('popup-a').value = memberRow.cells[6].querySelector('input').value;
+                document.getElementById('popup-z').value = memberRow.cells[7].querySelector('input').value;
+
+                // 密度欄の表示/非表示と値設定
+                const hasDensityColumn = document.querySelector('.density-column') && document.querySelector('.density-column').style.display !== 'none';
+                let existingDensityLabel = document.getElementById('popup-density-label');
+                let existingDensityContainer = document.getElementById('popup-density-container');
+
+                if (hasDensityColumn) {
+                    // 密度欄が表示されている場合の処理
+                    if (!existingDensityLabel || !existingDensityContainer) {
+                        // ポップアップ内に密度入力欄を挿入
+                        const popupZContainer = document.getElementById('popup-z').parentElement.parentElement;
+                        const densityLabel = document.createElement('label');
+                        densityLabel.textContent = '密度 (kg/m³):';
+                        densityLabel.id = 'popup-density-label';
+
+                        const densityContainer = document.createElement('div');
+                        densityContainer.id = 'popup-density-container';
+
+                        popupZContainer.parentElement.insertBefore(densityLabel, popupZContainer.nextSibling);
+                        popupZContainer.parentElement.insertBefore(densityContainer, densityLabel.nextSibling);
+
+                        existingDensityLabel = densityLabel;
+                        existingDensityContainer = densityContainer;
+                    }
+
+                    // 密度値を取得してポップアップに設定
+                    const densityCell = memberRow.cells[8];
+                    if (densityCell && densityCell.classList.contains('density-cell')) {
+                        const densitySelect = densityCell.querySelector('select');
+                        const densityInput = densityCell.querySelector('input[type="number"]');
+                        const currentDensity = (densitySelect && densitySelect.value === 'custom') ? densityInput.value : (densitySelect ? densitySelect.value : '7850');
+
+                        if (existingDensityContainer) {
+                            existingDensityContainer.innerHTML = createDensityInputHTML('popup-density', currentDensity);
+                        }
+                    }
+
+                    if (existingDensityLabel) existingDensityLabel.style.display = '';
+                    if (existingDensityContainer) existingDensityContainer.style.display = '';
+                } else {
+                    if (existingDensityLabel) existingDensityLabel.style.display = 'none';
+                    if (existingDensityContainer) existingDensityContainer.style.display = 'none';
+                }
+
+                // 接続条件を設定
+                const iConnIndex = hasDensityColumn ? 12 : 11;
+                const jConnIndex = hasDensityColumn ? 13 : 12;
+                document.getElementById('popup-i-conn').value = memberRow.cells[iConnIndex].querySelector('select').value;
+                document.getElementById('popup-j-conn').value = memberRow.cells[jConnIndex].querySelector('select').value;
+
+                // 部材荷重を設定
+                const memberLoadRow = Array.from(elements.memberLoadsTable.rows).find(row => parseInt(row.cells[0].querySelector('input').value)-1 === selectedMemberIndex);
+                document.getElementById('popup-w').value = memberLoadRow ? memberLoadRow.cells[1].querySelector('input').value : '0';
+
+                // ポップアップを表示
+                const popup = elements.memberPropsPopup;
+                console.log('📦 部材プロパティポップアップ表示:', {
+                    popup: popup,
+                    popupExists: !!popup,
+                    popupDisplay: popup ? popup.style.display : 'undefined'
+                });
+                
+                if (popup) {
+                    popup.style.display = 'block';
+                    console.log('✅ ポップアップ表示設定完了:', popup.style.display);
+                } else {
+                    console.error('❌ memberPropsPopup要素が見つかりません');
+                }
+
+                // ポップアップ位置を調整
+                setTimeout(() => {
+                    console.log('📍 ポップアップ位置調整実行');
+                    adjustPopupPosition(elements.memberPropsPopup);
+                }, 0);
+
+                drawOnCanvas();
             }
         }
     });
