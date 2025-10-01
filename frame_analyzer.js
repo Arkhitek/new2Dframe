@@ -1347,6 +1347,85 @@ function showMemberTooltip(memberData, mouseX, mouseY) {
         ? `<div class="tooltip-subsection"><div class="tooltip-subtitle">荷重</div><div class="tooltip-chip-list compact">${loadChips.join('')}</div></div>`
         : '';
 
+    // ==========================================================
+    // 解析結果セクション
+    // ==========================================================
+    let analysisSectionHTML = '';
+
+    // 解析結果がグローバル変数に存在するかチェック
+    if (window.lastResults && window.lastSectionCheckResults && window.lastBucklingResults) {
+        const memberIndex = memberData.number - 1;
+
+        const summaryChips = [];
+        const statItems = [];
+
+        // --- 断面算定結果 ---
+        const checkResult = window.lastSectionCheckResults[memberIndex];
+        if (checkResult && checkResult.maxRatio !== 'N/A') {
+            const isNg = checkResult.status === 'NG';
+
+            // 最大合成応力度を計算
+            let maxCombinedStress = null;
+            const N = asNumeric(checkResult.N);
+            const M = asNumeric(checkResult.M);
+            const A_m2 = asNumeric(properties?.area?.numeric) * 1e-4; // cm2 -> m2
+            const Z_m3 = asNumeric(properties?.sectionModulus?.numeric) * 1e-6; // cm3 -> m3
+
+            if (N !== null && M !== null && A_m2 !== null && Z_m3 !== null && A_m2 > 0 && Z_m3 > 0) {
+                const sigma_a = (Math.abs(N) * 1000) / (A_m2 * 1e6); // kN -> N, m2 -> mm2 => N/mm2
+                const sigma_b = (Math.abs(M) * 1e6) / (Z_m3 * 1e9); // kNm -> Nmm, m3 -> mm3 => N/mm2
+                maxCombinedStress = sigma_a + sigma_b;
+                statItems.push(`<div class="tooltip-stat-item"><span class="stat-label">最大合成応力度</span><span class="stat-value">${maxCombinedStress.toFixed(1)} N/mm²</span></div>`);
+            }
+
+            summaryChips.push(createChip({
+                label: '最大検定比',
+                numeric: checkResult.maxRatio,
+                digits: 3,
+                emphasis: isNg, // NGの場合は強調表示
+                wide: true,
+                subValue: `判定: ${checkResult.status}`
+            }));
+        }
+
+        // --- 座屈解析結果 ---
+        const bucklingResult = window.lastBucklingResults[memberIndex];
+        if (bucklingResult && typeof bucklingResult.safetyFactor === 'number' && isFinite(bucklingResult.safetyFactor)) {
+            const isDangerous = bucklingResult.status === '座屈危険';
+            const isWarning = bucklingResult.status === '要注意';
+            summaryChips.push(createChip({
+                label: '座屈安全率',
+                numeric: bucklingResult.safetyFactor,
+                digits: 2,
+                emphasis: isDangerous || isWarning, // 危険・要注意の場合は強調表示
+                wide: true,
+                subValue: `判定: ${bucklingResult.status}`
+            }));
+        }
+
+        // --- 最大断面力 ---
+        const forceResult = window.lastResults.forces[memberIndex];
+        if (forceResult) {
+            const maxAxial = Math.max(Math.abs(forceResult.N_i), Math.abs(forceResult.N_j));
+            const maxShear = Math.max(Math.abs(forceResult.Q_i), Math.abs(forceResult.Q_j));
+            const maxMoment = Math.max(Math.abs(forceResult.M_i), Math.abs(forceResult.M_j));
+
+            statItems.push(`<div class="tooltip-stat-item"><span class="stat-label">最大軸力</span><span class="stat-value">${maxAxial.toFixed(1)} kN</span></div>`);
+            statItems.push(`<div class="tooltip-stat-item"><span class="stat-label">最大せん断力</span><span class="stat-value">${maxShear.toFixed(1)} kN</span></div>`);
+            statItems.push(`<div class="tooltip-stat-item"><span class="stat-label">最大曲げM</span><span class="stat-value">${maxMoment.toFixed(1)} kN·m</span></div>`);
+        }
+
+        if (summaryChips.length > 0 || statItems.length > 0) {
+            analysisSectionHTML = `
+                <div class="tooltip-subsection">
+                    <div class="tooltip-subtitle">📈 解析結果</div>
+                    ${summaryChips.length > 0 ? `<div class="tooltip-chip-list">${summaryChips.join('')}</div>` : ''}
+                    ${statItems.length > 0 ? `<div class="tooltip-stat-grid" style="margin-top: 8px;">${statItems.join('')}</div>` : ''}
+                </div>`;
+        }
+    }
+    // ==========================================================
+
     let sectionColumnHTML = '';
     const axisChip = axisLabel ? `<span class="section-axis-chip">${axisLabel}</span>` : '';
     const sectionSummaryText = sectionSummary || sectionInfo?.dimensionSummary;
@@ -1386,17 +1465,23 @@ function showMemberTooltip(memberData, mouseX, mouseY) {
         `.trim();
     }
 
-    const infoPaneHTML = [
+    // 3列レイアウト用に情報を分割
+    const column1HTML = [
         summaryChipsHTML ? `<div class="tooltip-summary-chip-row">${summaryChipsHTML}</div>` : '',
         generalInfoSectionHTML,
+        connectionSectionHTML
+    ].filter(Boolean).join('');
+
+    const column2HTML = [
         propertySectionHTML,
-        connectionSectionHTML,
-        loadSectionHTML
+        loadSectionHTML,
+        analysisSectionHTML
     ].filter(Boolean).join('');
 
     let content = `<div class="tooltip-header">部材 ${number}</div>`;
     content += `<div class="tooltip-body">`;
-    content += `<div class="tooltip-info-pane">${infoPaneHTML}</div>`;
+    content += `<div class="tooltip-info-pane">${column1HTML}</div>`;
+    content += `<div class="tooltip-info-pane">${column2HTML}</div>`;
     content += `<div class="tooltip-figure-pane">${sectionColumnHTML}</div>`;
     content += `</div>`;
     
@@ -4111,16 +4196,20 @@ document.addEventListener('DOMContentLoaded', () => {
         lastResults = null;
         lastAnalysisResult = null;
         lastSectionCheckResults = null;
+        window.lastResults = null; // グローバル変数もクリア
+        window.lastSectionCheckResults = null;
+        window.lastBucklingResults = null;
     };
     
     const displayResults = (D, R, forces, nodes, members, nodeLoads, memberLoads) => {
         lastResults = { D, R, forces, nodes, members, nodeLoads, memberLoads };
-        
+        window.lastResults = lastResults; // グローバルに保存
+
         // エクセル出力用の解析結果を保存
         lastAnalysisResult = {
             displacements: D ? Array.from({length: D.length / 3}, (_, i) => ({
                 x: D[i*3][0],
-                y: D[i*3+1][0], 
+                y: D[i*3+1][0],
                 rotation: D[i*3+2][0]
             })) : [],
             forces: forces ? forces.map(f => ({
@@ -4129,18 +4218,19 @@ document.addEventListener('DOMContentLoaded', () => {
             })) : [],
             reactions: R ? Array.from({length: R.length / 3}, (_, i) => ({
                 x: -R[i*3][0] || 0,
-                y: -R[i*3+1][0] || 0, 
+                y: -R[i*3+1][0] || 0,
                 mz: -R[i*3+2][0] || 0
             })) : [],
             nodes: nodes || [],
             members: members || [],
             sectionCheckResults: null  // 後で断面検定実行時に設定される
         };
-        
+
         // 構造解析完了後に自動で座屈解析を実行
         if (forces && forces.length > 0) {
             try {
                 lastBucklingResults = calculateBucklingAnalysis();
+                window.lastBucklingResults = lastBucklingResults; // グローバルに保存
                 // 座屈解析結果も自動で表示
                 displayBucklingResults();
             } catch (error) {
@@ -9648,12 +9738,13 @@ const loadPreset = (index) => {
         if (!lastResults) return;
         const selectedTerm = document.querySelector('input[name="load-term"]:checked').value;
         lastSectionCheckResults = calculateSectionCheck(selectedTerm);
-        
+        window.lastSectionCheckResults = lastSectionCheckResults; // グローバルに保存
+
         // エクセル出力用にも断面検定結果を保存
         if (lastAnalysisResult) {
             lastAnalysisResult.sectionCheckResults = lastSectionCheckResults;
         }
-        
+
         displaySectionCheckResults();
         drawRatioDiagram();
     };
