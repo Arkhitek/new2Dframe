@@ -365,13 +365,7 @@
     </div>
 
     <div id="node-context-menu" class="context-menu">
-        <div class="context-menu-item" id="menu-edit-coords">座標を編集...</div>
-        <div class="context-menu-item" id="menu-add-load">節点荷重を編集...</div>
-        <div class="context-menu-separator"></div>
-        <div class="context-menu-item" data-support="free">境界条件: 自由</div>
-        <div class="context-menu-item" data-support="pinned">境界条件: ピン</div>
-        <div class="context-menu-item" data-support="fixed">境界条件: 固定</div>
-        <div class="context-menu-item" data-support="roller">境界条件: ローラー</div>
+        <div class="context-menu-item" id="menu-edit-node-props">プロパティを編集...</div>
         <div class="context-menu-separator"></div>
         <div class="context-menu-item" id="menu-delete-node">節点を削除</div>
     </div>
@@ -409,33 +403,39 @@
         </div>
     </div>
     
-    <div id="node-load-popup" class="popup-box">
-        <h4>節点荷重編集</h4>
-        <div class="props-grid">
-            <label for="popup-px">Px (kN)</label>
-            <input type="number" id="popup-px">
-            <label for="popup-py">Py (kN)</label>
-            <input type="number" id="popup-py">
-            <label for="popup-mz">Mz (kN・m)</label>
-            <input type="number" id="popup-mz">
+    <div id="node-props-popup" class="popup-box" style="width: 320px;">
+        <h4>節点プロパティ編集</h4>
+        <div class="props-grid" style="grid-template-columns: 120px 1fr;">
+            <label for="popup-x">X座標 (m)</label>
+            <input type="number" id="popup-x" step="0.01">
+            <label for="popup-y">Y座標 (m)</label>
+            <input type="number" id="popup-y" step="0.01">
+            
+            <label for="popup-support">境界条件</label>
+            <select id="popup-support">
+                <option value="free">自由</option>
+                <option value="pinned">ピン</option>
+                <option value="fixed">固定</option>
+                <option value="roller">ローラー</option>
+            </select>
+            
+            <label for="popup-px">荷重 Px (kN)</label>
+            <input type="number" id="popup-px" step="0.1">
+            <label for="popup-py">荷重 Py (kN)</label>
+            <input type="number" id="popup-py" step="0.1">
+            <label for="popup-mz">荷重 Mz (kN・m)</label>
+            <input type="number" id="popup-mz" step="0.1">
+            
+            <label for="popup-dx">強制変位 δx (mm)</label>
+            <input type="number" id="popup-dx" step="0.1">
+            <label for="popup-dy">強制変位 δy (mm)</label>
+            <input type="number" id="popup-dy" step="0.1">
+            <label for="popup-dr">強制回転 θz (rad)</label>
+            <input type="number" id="popup-dr" step="0.001">
         </div>
         <div class="popup-buttons">
-            <button id="popup-node-load-cancel">キャンセル</button>
-            <button id="popup-node-load-save">保存</button>
-        </div>
-    </div>
-
-    <div id="node-coords-popup" class="popup-box">
-        <h4>節点座標編集</h4>
-        <div class="props-grid">
-            <label for="popup-x">X (m)</label>
-            <input type="number" id="popup-x">
-            <label for="popup-y">Y (m)</label>
-            <input type="number" id="popup-y">
-        </div>
-        <div class="popup-buttons">
-            <button id="popup-coords-cancel">キャンセル</button>
-            <button id="popup-coords-save">保存</button>
+            <button id="popup-node-props-cancel">キャンセル</button>
+            <button id="popup-node-props-save">保存</button>
         </div>
     </div>
 

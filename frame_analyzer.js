@@ -1594,8 +1594,7 @@ document.addEventListener('DOMContentLoaded', () => {
         undoBtn: document.getElementById('undo-btn'),
         nodeContextMenu: document.getElementById('node-context-menu'),
         memberPropsPopup: document.getElementById('member-props-popup'),
-        nodeLoadPopup: document.getElementById('node-load-popup'),
-        nodeCoordsPopup: document.getElementById('node-coords-popup'),
+        nodePropsPopup: document.getElementById('node-props-popup'),
         addMemberPopup: document.getElementById('add-member-popup'),
         gridToggle: document.getElementById('grid-toggle'),
         memberInfoToggle: document.getElementById('member-info-toggle'),
@@ -1622,8 +1621,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // デバッグ: 重要なポップアップ要素の存在確認
     console.log('🔍 ポップアップ要素チェック:', {
         memberPropsPopup: !!elements.memberPropsPopup,
-        nodeLoadPopup: !!elements.nodeLoadPopup,
-        nodeCoordsPopup: !!elements.nodeCoordsPopup
+        nodePropsPopup: !!elements.nodePropsPopup
     });
 
     let panZoomState = { scale: 1, offsetX: 0, offsetY: 0, isInitialized: false };
@@ -5165,6 +5163,95 @@ document.addEventListener('DOMContentLoaded', () => {
             labelManager.draw(ctx, labelText, textX, textY, loadObstacles);
         }); 
         }
+
+        // ==========================================================
+        // ▼▼▼ ここからが強制変位を描画するための追加コードです ▼▼▼
+        // ==========================================================
+        const dispArrowSize = 8;
+        const dispScale = 2.5;
+
+        // 強制変位用に色と線の太さを設定 (紫)
+        ctx.strokeStyle = '#8e44ad';
+        ctx.fillStyle = '#8e44ad';
+        ctx.lineWidth = 2.0;
+
+        nodes.forEach((node, i) => {
+            const dx = node.dx_forced || 0; // m
+            const dy = node.dy_forced || 0; // m
+            const r = node.r_forced || 0;  // rad
+
+            if (dx === 0 && dy === 0 && r === 0) return;
+
+            const pos = transform(node.x, node.y);
+
+            // X方向の強制変位を描画
+            if (dx !== 0) {
+                const dir = Math.sign(dx);
+                const text = `${(dx * 1000).toFixed(1)}mm`;
+                ctx.beginPath();
+                ctx.moveTo(pos.x - dispArrowSize * dispScale * dir, pos.y);
+                ctx.lineTo(pos.x, pos.y);
+                ctx.stroke();
+                // 荷重と区別するための二重矢印
+                ctx.beginPath();
+                ctx.moveTo(pos.x - dispArrowSize * dir, pos.y - dispArrowSize / 2);
+                ctx.lineTo(pos.x, pos.y);
+                ctx.lineTo(pos.x - dispArrowSize * dir, pos.y + dispArrowSize / 2);
+                ctx.moveTo(pos.x - dispArrowSize * 0.5 * dir, pos.y - dispArrowSize * 0.3);
+                ctx.lineTo(pos.x, pos.y);
+                ctx.lineTo(pos.x - dispArrowSize * 0.5 * dir, pos.y + dispArrowSize * 0.3);
+                ctx.stroke();
+                const textX = pos.x - (dispArrowSize * dispScale * 0.7) * dir;
+                labelManager.draw(ctx, text, textX, pos.y, loadObstacles);
+            }
+
+            // Y方向の強制変位を描画
+            if (dy !== 0) {
+                const dir = Math.sign(dy);
+                const text = `${(dy * 1000).toFixed(1)}mm`;
+                ctx.beginPath();
+                ctx.moveTo(pos.x, pos.y + dispArrowSize * dispScale * dir);
+                ctx.lineTo(pos.x, pos.y);
+                ctx.stroke();
+                // 荷重と区別するための二重矢印
+                ctx.beginPath();
+                ctx.moveTo(pos.x - dispArrowSize / 2, pos.y + dispArrowSize * dir);
+                ctx.lineTo(pos.x, pos.y);
+                ctx.lineTo(pos.x + dispArrowSize / 2, pos.y + dispArrowSize * dir);
+                ctx.moveTo(pos.x - dispArrowSize * 0.3, pos.y + dispArrowSize * 0.5 * dir);
+                ctx.lineTo(pos.x, pos.y);
+                ctx.lineTo(pos.x + dispArrowSize * 0.3, pos.y + dispArrowSize * 0.5 * dir);
+                ctx.stroke();
+                const textY = pos.y + (dispArrowSize * dispScale * 0.8) * dir;
+                labelManager.draw(ctx, text, pos.x, textY, loadObstacles);
+            }
+
+            // 強制回転を描画
+            if (r !== 0) {
+                const dir = -Math.sign(r);
+                const radius = dispArrowSize * 1.8;
+                const arrowHeadSize = 6;
+                const startAngle = Math.PI, endAngle = Math.PI * 2.5;
+                ctx.beginPath();
+                ctx.arc(pos.x, pos.y, radius, startAngle, endAngle, dir < 0);
+                ctx.stroke();
+                const endX = pos.x + radius * Math.cos(endAngle), endY = pos.y + radius * Math.sin(endAngle);
+                const smallAngleOffset = 0.05 * (dir > 0 ? -1 : 1);
+                const beforeX = pos.x + radius * Math.cos(endAngle + smallAngleOffset), beforeY = pos.y + radius * Math.sin(endAngle + smallAngleOffset);
+                const tangentAngle = Math.atan2(endY - beforeY, endX - beforeX);
+                ctx.beginPath();
+                ctx.moveTo(endX, endY);
+                ctx.lineTo(endX - arrowHeadSize * Math.cos(tangentAngle - Math.PI / 4), endY - arrowHeadSize * Math.sin(tangentAngle - Math.PI / 4));
+                ctx.moveTo(endX, endY);
+                ctx.lineTo(endX - arrowHeadSize * Math.cos(tangentAngle + Math.PI / 4), endY - arrowHeadSize * Math.sin(tangentAngle + Math.PI / 4));
+                ctx.stroke();
+                const textY = pos.y - radius * 1.2;
+                labelManager.draw(ctx, `${r.toFixed(3)}rad`, pos.x, textY, loadObstacles);
+            }
+        });
+        // ==========================================================
+        // ▲▲▲ ここまでが追加コードです ▲▲▲
+        // ==========================================================
     };
     const drawGrid = (ctx, transform, width, height) => { const { x: minX, y: maxY } = inverseTransform(0,0); const { x: maxX, y: minY } = inverseTransform(width, height); const spacing = parseFloat(elements.gridSpacing.value); if (isNaN(spacing) || spacing <= 0) return; ctx.strokeStyle = '#e9e9e9'; ctx.lineWidth = 1; const startX = Math.floor(minX / spacing) * spacing; for (let x = startX; x <= maxX; x += spacing) { const p1 = transform(x, minY); const p2 = transform(x, maxY); ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke(); } const startY = Math.floor(minY / spacing) * spacing; for (let y = startY; y <= maxY; y += spacing) { const p1 = transform(minX, y); const p2 = transform(maxX, y); ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke(); } };
     const LabelManager = () => {
@@ -7706,54 +7793,16 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     elements.nodeContextMenu.addEventListener('click', (e) => {
-        e.stopPropagation(); const target=e.target; if (selectedNodeIndex===null) return; const nodeRow=elements.nodesTable.rows[selectedNodeIndex];
-        if (target.dataset.support) { pushState(); const selectEl=nodeRow.cells[3].querySelector('select'); selectEl.value=target.dataset.support; selectEl.dispatchEvent(new Event('change')); }
-        if (target.id === 'menu-delete-node') { nodeRow.querySelector('.delete-row-btn').click(); }
-        if (target.id === 'menu-add-load') {
-            const currentLoads = Array.from(elements.nodeLoadsTable.rows).find(row => parseInt(row.cells[0].querySelector('input').value)-1 === selectedNodeIndex);
-            document.getElementById('popup-px').value=currentLoads?currentLoads.cells[1].querySelector('input').value:'0';
-            document.getElementById('popup-py').value=currentLoads?currentLoads.cells[2].querySelector('input').value:'0';
-            document.getElementById('popup-mz').value=currentLoads?currentLoads.cells[3].querySelector('input').value:'0';
-            
-            // ポップアップを画面中央に表示
-            const popup = elements.nodeLoadPopup;
-            popup.style.display = 'block';
-            
-            // ポップアップのサイズを取得
-            const popupRect = popup.getBoundingClientRect();
-            const windowWidth = window.innerWidth;
-            const windowHeight = window.innerHeight;
-            
-            // 画面中央に配置
-            const left = Math.max(0, (windowWidth - popupRect.width) / 2);
-            const top = Math.max(0, (windowHeight - popupRect.height) / 2);
-            
-            popup.style.left = `${left}px`;
-            popup.style.top = `${top}px`;
-            popup.style.position = 'fixed';
+        e.stopPropagation();
+        const target = e.target;
+        if (selectedNodeIndex === null) return;
+
+        if (target.id === 'menu-edit-node-props') {
+            openNodeEditor(selectedNodeIndex);
+        } else if (target.id === 'menu-delete-node') {
+            elements.nodesTable.rows[selectedNodeIndex].querySelector('.delete-row-btn').click();
         }
-        if (target.id === 'menu-edit-coords') {
-            document.getElementById('popup-x').value=nodeRow.cells[1].querySelector('input').value;
-            document.getElementById('popup-y').value=nodeRow.cells[2].querySelector('input').value;
-            
-            // ポップアップを画面中央に表示
-            const popup = elements.nodeCoordsPopup;
-            popup.style.display = 'block';
-            
-            // ポップアップのサイズを取得
-            const popupRect = popup.getBoundingClientRect();
-            const windowWidth = window.innerWidth;
-            const windowHeight = window.innerHeight;
-            
-            // 画面中央に配置
-            const left = Math.max(0, (windowWidth - popupRect.width) / 2);
-            const top = Math.max(0, (windowHeight - popupRect.height) / 2);
-            
-            popup.style.left = `${left}px`;
-            popup.style.top = `${top}px`;
-            popup.style.position = 'fixed';
-        }
-        elements.nodeContextMenu.style.display='none';
+        elements.nodeContextMenu.style.display = 'none';
     });
 
     document.getElementById('popup-select-section').onclick = () => {
@@ -7890,18 +7939,79 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     document.getElementById('popup-cancel').onclick = () => { elements.memberPropsPopup.style.display = 'none'; };
     document.getElementById('popup-delete-member').onclick = () => { if(selectedMemberIndex !== null) { elements.membersTable.rows[selectedMemberIndex].querySelector('.delete-row-btn').click(); elements.memberPropsPopup.style.display='none'; } };
-    document.getElementById('popup-node-load-save').onclick = () => {
-        pushState();
-        const px = document.getElementById('popup-px').value||0, py=document.getElementById('popup-py').value||0, mz=document.getElementById('popup-mz').value||0;
-        const currentLoads = Array.from(elements.nodeLoadsTable.rows).find(row => parseInt(row.cells[0].querySelector('input').value)-1 === selectedNodeIndex);
-        if (parseFloat(px)===0 && parseFloat(py)===0 && parseFloat(mz)===0) { if (currentLoads) currentLoads.querySelector('.delete-row-btn').click(); } 
-        else { if (currentLoads) { currentLoads.cells[1].querySelector('input').value=px; currentLoads.cells[2].querySelector('input').value=py; currentLoads.cells[3].querySelector('input').value=mz; } 
-        else { addRow(elements.nodeLoadsTable, [`<input type="number" value="${selectedNodeIndex+1}">`,`<input type="number" value="${px}">`,`<input type="number" value="${py}">`,`<input type="number" value="${mz}">`]); } }
-        elements.nodeLoadPopup.style.display='none'; runFullAnalysis(); drawOnCanvas();
+
+    // 節点プロパティ編集ポップアップを開き、データを設定する関数
+    const openNodeEditor = (nodeIndex) => {
+        selectedNodeIndex = nodeIndex;
+        window.selectedNodeIndex = nodeIndex;
+
+        const nodeRow = elements.nodesTable.rows[nodeIndex];
+        const loadRow = Array.from(elements.nodeLoadsTable.rows).find(row => parseInt(row.cells[0].querySelector('input').value) - 1 === nodeIndex);
+
+        // 各入力フィールドに現在の値を設定
+        document.getElementById('popup-x').value = nodeRow.cells[1].querySelector('input').value;
+        document.getElementById('popup-y').value = nodeRow.cells[2].querySelector('input').value;
+        document.getElementById('popup-support').value = nodeRow.cells[3].querySelector('select').value;
+        document.getElementById('popup-dx').value = nodeRow.cells[4].querySelector('input').value;
+        document.getElementById('popup-dy').value = nodeRow.cells[5].querySelector('input').value;
+        document.getElementById('popup-dr').value = nodeRow.cells[6].querySelector('input').value;
+
+        document.getElementById('popup-px').value = loadRow ? loadRow.cells[1].querySelector('input').value : '0';
+        document.getElementById('popup-py').value = loadRow ? loadRow.cells[2].querySelector('input').value : '0';
+        document.getElementById('popup-mz').value = loadRow ? loadRow.cells[3].querySelector('input').value : '0';
+        
+        const popup = elements.nodePropsPopup;
+        popup.style.display = 'block';
+
+        // ポップアップを画面中央に配置
+        const popupRect = popup.getBoundingClientRect();
+        popup.style.left = `${(window.innerWidth - popupRect.width) / 2}px`;
+        popup.style.top = `${(window.innerHeight - popupRect.height) / 2}px`;
+        popup.style.position = 'fixed';
     };
-    document.getElementById('popup-node-load-cancel').onclick = () => { elements.nodeLoadPopup.style.display = 'none'; };
-    document.getElementById('popup-coords-save').onclick = () => { if(selectedNodeIndex===null)return; pushState(); const nodeRow=elements.nodesTable.rows[selectedNodeIndex]; nodeRow.cells[1].querySelector('input').value=document.getElementById('popup-x').value; nodeRow.cells[2].querySelector('input').value=document.getElementById('popup-y').value; elements.nodeCoordsPopup.style.display='none'; runFullAnalysis(); drawOnCanvas(); };
-    document.getElementById('popup-coords-cancel').onclick = () => { elements.nodeCoordsPopup.style.display = 'none'; };
+
+    // 新しい節点プロパティポップアップの保存ボタンの処理
+    document.getElementById('popup-node-props-save').onclick = () => {
+        if (selectedNodeIndex === null) return;
+        pushState();
+        
+        // 節点テーブルの値を更新
+        const nodeRow = elements.nodesTable.rows[selectedNodeIndex];
+        nodeRow.cells[1].querySelector('input').value = document.getElementById('popup-x').value;
+        nodeRow.cells[2].querySelector('input').value = document.getElementById('popup-y').value;
+        nodeRow.cells[3].querySelector('select').value = document.getElementById('popup-support').value;
+        nodeRow.cells[4].querySelector('input').value = document.getElementById('popup-dx').value;
+        nodeRow.cells[5].querySelector('input').value = document.getElementById('popup-dy').value;
+        nodeRow.cells[6].querySelector('input').value = document.getElementById('popup-dr').value;
+
+        // 節点荷重テーブルの値を更新または作成/削除
+        const px = document.getElementById('popup-px').value || 0;
+        const py = document.getElementById('popup-py').value || 0;
+        const mz = document.getElementById('popup-mz').value || 0;
+
+        let loadRow = Array.from(elements.nodeLoadsTable.rows).find(row => parseInt(row.cells[0].querySelector('input').value) - 1 === selectedNodeIndex);
+
+        if (parseFloat(px) === 0 && parseFloat(py) === 0 && parseFloat(mz) === 0) {
+            if (loadRow) loadRow.remove(); // 全ての荷重が0なら行を削除
+        } else {
+            if (loadRow) { // 既存の行があれば更新
+                loadRow.cells[1].querySelector('input').value = px;
+                loadRow.cells[2].querySelector('input').value = py;
+                loadRow.cells[3].querySelector('input').value = mz;
+            } else { // なければ新規作成
+                addRow(elements.nodeLoadsTable, [`<input type="number" value="${selectedNodeIndex + 1}">`, `<input type="number" value="${px}">`, `<input type="number" value="${py}">`, `<input type="number" value="${mz}">`]);
+            }
+        }
+        
+        elements.nodePropsPopup.style.display = 'none';
+        runFullAnalysis();
+        drawOnCanvas();
+    };
+
+    // 新しい節点プロパティポップアップのキャンセルボタンの処理
+    document.getElementById('popup-node-props-cancel').onclick = () => {
+        elements.nodePropsPopup.style.display = 'none';
+    };
 
     document.getElementById('help-select').onclick = () => alert('【選択/移動モード】\n・節点をクリック＆ドラッグして移動します。\n・節点、部材、荷重を右クリックすると、編集メニューが表示されます。\n・Shiftキーを押しながら空白部分をドラッグすると矩形範囲で節点または部材を追加/解除選択できます。\n・Ctrl（⌘）キーを押しながら空白部分をドラッグすると範囲選択をやり直せます。\n・矩形内に節点と部材が混在する場合は、解除後にどちらを選択するかのメニューが表示されます。\n\n■複数選択機能：\n・Shiftキーを押しながら節点や部材をクリックすると複数選択できます。\n・選択された要素は赤色で強調表示されます。\n・Escapeキーで選択をクリアできます。\n・選択中の要素は一括編集が可能です。');
     document.getElementById('help-add-node').onclick = () => alert('【節点追加モード】\n・キャンバス上の好きな位置をクリックすると、新しい節点が追加されます。\n・グリッド表示時、交点近くをクリックすると自動で交点上に配置されます。\n・既存の部材上をクリックすると、その部材を2つに分割する形で節点が追加されます。');
@@ -11363,31 +11473,10 @@ const loadPreset = (index) => {
             });
 
             if (clickedNodeIndex !== -1) {
-                // 節点の座標編集ポップアップを表示
+                // 節点のプロパティ編集ポップアップを表示
                 e.preventDefault();
                 e.stopPropagation();
-                selectedNodeIndex = clickedNodeIndex;
-                window.selectedNodeIndex = clickedNodeIndex;
-
-                const nodeRow = elements.nodesTable.rows[clickedNodeIndex];
-                document.getElementById('popup-x').value = nodeRow.cells[1].querySelector('input').value;
-                document.getElementById('popup-y').value = nodeRow.cells[2].querySelector('input').value;
-
-                // ポップアップを画面中央に表示
-                const popup = elements.nodeCoordsPopup;
-                popup.style.display = 'block';
-
-                const popupRect = popup.getBoundingClientRect();
-                const windowWidth = window.innerWidth;
-                const windowHeight = window.innerHeight;
-
-                const left = Math.max(0, (windowWidth - popupRect.width) / 2);
-                const top = Math.max(0, (windowHeight - popupRect.height) / 2);
-
-                popup.style.left = `${left}px`;
-                popup.style.top = `${top}px`;
-                popup.style.position = 'fixed';
-
+                openNodeEditor(clickedNodeIndex);
                 drawOnCanvas();
             } else if (clickedMemberIndex !== -1) {
                 // 部材のプロパティ編集ポップアップを表示
