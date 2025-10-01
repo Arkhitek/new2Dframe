@@ -11706,11 +11706,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const A = member.A || 100; // cm2
 
             // Z = I / (H/2) より H = 2I/Z
-            const h = (2 * I / Z) * 10; // cm → mm
-            const b = (A * 100 / h) || h / 2; // mm
+            // より大きく目立つように、計算値の20倍にスケーリング
+            const h = (2 * I / Z) * 10 * 20; // cm → mm (20倍スケール)
+            const b = ((A * 100 / h) || h / 2) * 20; // mm (20倍スケール)
 
             member.sectionInfo = {
-                rawDims: { H: h, B: b, t1: b/10, t2: h/10 },
+                rawDims: { H: h, B: b, t1: b/6, t2: h/6 }, // 肉厚も太めに
                 typeKey: 'estimated',
                 label: '推定断面'
             };
@@ -11728,7 +11729,11 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-        const material = new THREE.MeshLambertMaterial({ color: 0x607D8B, wireframe: false });
+        
+        // 推定断面（断面が選択されていない部材）はオレンジ色、それ以外はグレー
+        const isEstimated = member.sectionInfo && member.sectionInfo.typeKey === 'estimated';
+        const materialColor = isEstimated ? 0xFF8C00 : 0x607D8B; // オレンジ : グレー
+        const material = new THREE.MeshLambertMaterial({ color: materialColor, wireframe: false });
         const mesh = new THREE.Mesh(geometry, material);
         
         // 部材方向ベクトル
@@ -11957,14 +11962,16 @@ const createSectionShape = (sectionInfo, member) => {
         }
         // ▲▲▲ ここまで修正・追加 ▲▲▲
         // その他の形状は簡易的な矩形で代替
+        case 'estimated':
         default: {
             // I, Z, Aから寸法を推定
             const I = member.I || 1000; // cm4
             const Z = member.Z || 100; // cm3
             const A = member.A || 10; // cm2
 
-            const h = (2 * I / Z) * 10; // cm → mm
-            const b = (A * 100 / h) || h / 2; // mm
+            // より大きく目立つように、計算値の20倍にスケーリング
+            const h = (2 * I / Z) * 10 * 20; // cm → mm (20倍スケール)
+            const b = ((A * 100 / h) || h / 2) * 20; // mm (20倍スケール)
 
             const halfH = (h * MM_TO_M) / 2;
             const halfB = (b * MM_TO_M) / 2;
