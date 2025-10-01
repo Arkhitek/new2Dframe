@@ -11520,7 +11520,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const closeBtn = modal.querySelector('.modal-3d-close');
     const canvasContainer = document.getElementById('canvas-3d-container');
 
-    let scene, camera, renderer, controls, animationFrameId;
+    let scene, camera, renderer, controls, animationFrameId, labelRenderer;
 
     // 3Dビューアを開く
     const open3DViewer = () => {
@@ -11571,6 +11571,12 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             renderer = null;
         }
+        if (labelRenderer) {
+            if (canvasContainer.contains(labelRenderer.domElement)) {
+                canvasContainer.removeChild(labelRenderer.domElement);
+            }
+            labelRenderer = null;
+        }
         scene = null;
         camera = null;
         controls = null;
@@ -11600,6 +11606,15 @@ document.addEventListener('DOMContentLoaded', () => {
         canvasContainer.appendChild(renderer.domElement);
         console.log('レンダラー作成完了');
 
+        // CSS2DRenderer（ラベル用）
+        labelRenderer = new THREE.CSS2DRenderer();
+        labelRenderer.setSize(canvasContainer.clientWidth, canvasContainer.clientHeight);
+        labelRenderer.domElement.style.position = 'absolute';
+        labelRenderer.domElement.style.top = '0';
+        labelRenderer.domElement.style.pointerEvents = 'none';
+        canvasContainer.appendChild(labelRenderer.domElement);
+        console.log('CSS2DRenderer作成完了');
+
         // コントロール
         controls = new THREE.OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
@@ -11624,13 +11639,27 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('build3DModel開始', { nodeCount: nodes.length, memberCount: members.length });
         const memberGroup = new THREE.Group();
         const nodeMaterial = new THREE.MeshLambertMaterial({ color: 0x1565C0 });
-        const nodeGeometry = new THREE.SphereGeometry(0.2, 16, 16);
+        const nodeGeometry = new THREE.BoxGeometry(0.4, 0.4, 0.4); // 正立方体に変更
 
         // 節点を描画
         nodes.forEach((node, i) => {
             const nodeMesh = new THREE.Mesh(nodeGeometry, nodeMaterial);
             nodeMesh.position.set(node.x, node.y, 0);
             memberGroup.add(nodeMesh);
+            
+            // 節点番号ラベルを追加
+            const nodeDiv = document.createElement('div');
+            nodeDiv.className = 'label';
+            nodeDiv.textContent = `N${i + 1}`;
+            nodeDiv.style.color = '#1565C0';
+            nodeDiv.style.fontSize = '14px';
+            nodeDiv.style.fontWeight = 'bold';
+            nodeDiv.style.backgroundColor = 'rgba(255, 255, 255, 0.8)';
+            nodeDiv.style.padding = '2px 4px';
+            nodeDiv.style.borderRadius = '3px';
+            const nodeLabel = new THREE.CSS2DObject(nodeDiv);
+            nodeLabel.position.set(node.x, node.y, 0.5); // 節点の少し上に表示
+            memberGroup.add(nodeLabel);
         });
         console.log('節点描画完了:', nodes.length);
 
@@ -11642,6 +11671,25 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (memberMesh) {
                     memberGroup.add(memberMesh);
                     successCount++;
+                    
+                    // 部材番号ラベルを部材の中央に追加
+                    const p1 = nodes[member.i];
+                    const p2 = nodes[member.j];
+                    const centerX = (p1.x + p2.x) / 2;
+                    const centerY = (p1.y + p2.y) / 2;
+                    
+                    const memberDiv = document.createElement('div');
+                    memberDiv.className = 'label';
+                    memberDiv.textContent = `M${index + 1}`;
+                    memberDiv.style.color = '#FF6B00';
+                    memberDiv.style.fontSize = '12px';
+                    memberDiv.style.fontWeight = 'bold';
+                    memberDiv.style.backgroundColor = 'rgba(255, 255, 255, 0.8)';
+                    memberDiv.style.padding = '2px 4px';
+                    memberDiv.style.borderRadius = '3px';
+                    const memberLabel = new THREE.CSS2DObject(memberDiv);
+                    memberLabel.position.set(centerX, centerY, 0);
+                    memberGroup.add(memberLabel);
                 }
             } catch(e) {
                 console.warn(`部材 ${member.i+1}-${member.j+1} の3Dメッシュ作成に失敗しました:`, e);
@@ -11770,6 +11818,90 @@ document.addEventListener('DOMContentLoaded', () => {
             if (member.sectionAxis && member.sectionAxis.key === 'y') {
                 mesh.rotateZ(Math.PI / 2);
             }
+        }
+
+        // ピン接合部にヒンジマーカー（赤い外形、白い中央の円筒）を追加
+        const hingeGroup = new THREE.Group();
+        const redMaterial = new THREE.MeshLambertMaterial({ color: 0xFF0000, side: THREE.DoubleSide }); // 赤色
+        const whiteMaterial = new THREE.MeshLambertMaterial({ color: 0xFFFFFF, side: THREE.DoubleSide }); // 白色
+
+        // 赤い外形と白い中央の円筒ジオメトリを作成する関数
+        const createRedWhiteCylinderGeometry = () => {
+            const outerRadius = 0.15; // 外側の半径
+            const innerRadius = 0.1; // 内側の半径
+            const height = 0.05; // 高さ（薄く）
+            const radialSegments = 32; // 円周方向の分割数
+            
+            return {
+                outer: new THREE.CylinderGeometry(outerRadius, outerRadius, height, radialSegments),
+                inner: new THREE.CylinderGeometry(innerRadius, innerRadius, height * 1.01, radialSegments) // 少し高くしてZファイティングを防ぐ
+            };
+        };
+
+        // 部材の方向ベクトル
+        const memberDirection = new THREE.Vector3().subVectors(p2, p1).normalize();
+        const offset = 0.5; // 節点から内側へのオフセット距離（メートル）
+
+        // デバッグログ
+        console.log(`部材 ${member.i+1}-${member.j+1}: i_conn=${member.i_conn}, j_conn=${member.j_conn}`);
+
+        // 始端がピン接合の場合（節点マーカーに接する位置に配置）
+        if (member.i_conn === 'pinned') {
+            const geometries = createRedWhiteCylinderGeometry();
+            
+            // 赤い外形
+            const hingeOuterI = new THREE.Mesh(geometries.outer, redMaterial);
+            // 白い中央
+            const hingeInnerI = new THREE.Mesh(geometries.inner, whiteMaterial);
+            
+            // 部材軸方向にオフセット
+            const offsetDist = 0.35;
+            const offsetPosition = new THREE.Vector3().copy(p1).addScaledVector(memberDirection, offsetDist);
+            
+            hingeOuterI.position.copy(offsetPosition);
+            hingeInnerI.position.copy(offsetPosition);
+            
+            // CylinderGeometryはデフォルトでY軸方向なので、Z軸方向（画面奥行）に回転
+            hingeOuterI.rotation.x = Math.PI / 2;
+            hingeInnerI.rotation.x = Math.PI / 2;
+            
+            hingeGroup.add(hingeOuterI);
+            hingeGroup.add(hingeInnerI);
+            console.log(`  → 始端にヒンジマーカー追加: ${offsetPosition.x}, ${offsetPosition.y}, ${offsetPosition.z}`);
+        }
+
+        // 終端がピン接合の場合（節点マーカーに接する位置に配置）
+        if (member.j_conn === 'pinned') {
+            const geometries = createRedWhiteCylinderGeometry();
+            
+            // 赤い外形
+            const hingeOuterJ = new THREE.Mesh(geometries.outer, redMaterial);
+            // 白い中央
+            const hingeInnerJ = new THREE.Mesh(geometries.inner, whiteMaterial);
+            
+            // 部材軸方向にオフセット（終端なので逆方向）
+            const offsetDist = 0.35;
+            const offsetPosition = new THREE.Vector3().copy(p2).addScaledVector(memberDirection, -offsetDist);
+            
+            hingeOuterJ.position.copy(offsetPosition);
+            hingeInnerJ.position.copy(offsetPosition);
+            
+            // CylinderGeometryはデフォルトでY軸方向なので、Z軸方向（画面奥行）に回転
+            hingeOuterJ.rotation.x = Math.PI / 2;
+            hingeInnerJ.rotation.x = Math.PI / 2;
+            
+            hingeGroup.add(hingeOuterJ);
+            hingeGroup.add(hingeInnerJ);
+            console.log(`  → 終端にヒンジマーカー追加: ${offsetPosition.x}, ${offsetPosition.y}, ${offsetPosition.z}`);
+        }
+
+        // 部材メッシュとヒンジをまとめたグループを返す
+        if (hingeGroup.children.length > 0) {
+            const combinedGroup = new THREE.Group();
+            combinedGroup.add(mesh);
+            combinedGroup.add(hingeGroup);
+            console.log(`  → グループ化して返す (ヒンジ数: ${hingeGroup.children.length})`);
+            return combinedGroup;
         }
 
         return mesh;
@@ -11992,6 +12124,9 @@ const createSectionShape = (sectionInfo, member) => {
         animationFrameId = requestAnimationFrame(animate3D);
         controls.update();
         renderer.render(scene, camera);
+        if (labelRenderer) {
+            labelRenderer.render(scene, camera);
+        }
     };
 
     // ウィンドウリサイズ対応
@@ -12000,6 +12135,9 @@ const createSectionShape = (sectionInfo, member) => {
             camera.aspect = canvasContainer.clientWidth / canvasContainer.clientHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(canvasContainer.clientWidth, canvasContainer.clientHeight);
+            if (labelRenderer) {
+                labelRenderer.setSize(canvasContainer.clientWidth, canvasContainer.clientHeight);
+            }
         }
     };
 
