@@ -4572,7 +4572,11 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // 等分布荷重のテキスト表示（自重でない荷重のみ）
             const loadText = `${Math.abs(load.w).toFixed(2)}kN/m`;
-            labelManager.draw(ctx, loadText, textX, textY, [...obstacles, arrowObstacle]); 
+            labelManager.draw(ctx, loadText, textX, textY, [...obstacles, arrowObstacle], {
+                type: 'member-load-w',
+                index: load.memberIndex,
+                value: load.w
+            }); 
             
             // 分布荷重のテキスト領域を障害物として追加
             const displayText = loadText;
@@ -4754,7 +4758,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 const textX = pos.x - (arrowSize * loadScale * 0.7) * dir;
                 const textY = pos.y;
                 ctx.fillStyle = '#ff4500';
-                labelManager.draw(ctx, `${load.px}kN`, textX, textY, loadObstacles);
+                labelManager.draw(ctx, `${load.px}kN`, textX, textY, loadObstacles, {
+                    type: 'node-load-px',
+                    index: load.nodeIndex,
+                    value: load.px
+                });
             } 
             
             if(load.py !== 0){ 
@@ -4771,7 +4779,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 const textX = pos.x;
                 const textY = pos.y + (arrowSize * loadScale * 0.8) * dir;
                 ctx.fillStyle = '#ff4500';
-                labelManager.draw(ctx, `${load.py}kN`, textX, textY, loadObstacles);
+                labelManager.draw(ctx, `${load.py}kN`, textX, textY, loadObstacles, {
+                    type: 'node-load-py',
+                    index: load.nodeIndex,
+                    value: load.py
+                });
             } 
             
             if(load.mz !== 0){ 
@@ -4800,7 +4812,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 const textX = pos.x;
                 const textY = pos.y - r * 0.7;
                 ctx.fillStyle = '#ff4500';
-                labelManager.draw(ctx, `${load.mz}kN·m`, textX, textY, loadObstacles);
+                labelManager.draw(ctx, `${load.mz}kN·m`, textX, textY, loadObstacles, {
+                    type: 'node-load-mz',
+                    index: load.nodeIndex,
+                    value: load.mz
+                });
             } 
             });
         }
@@ -4955,83 +4971,116 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
     const drawGrid = (ctx, transform, width, height) => { const { x: minX, y: maxY } = inverseTransform(0,0); const { x: maxX, y: minY } = inverseTransform(width, height); const spacing = parseFloat(elements.gridSpacing.value); if (isNaN(spacing) || spacing <= 0) return; ctx.strokeStyle = '#e9e9e9'; ctx.lineWidth = 1; const startX = Math.floor(minX / spacing) * spacing; for (let x = startX; x <= maxX; x += spacing) { const p1 = transform(x, minY); const p2 = transform(x, maxY); ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke(); } const startY = Math.floor(minY / spacing) * spacing; for (let y = startY; y <= maxY; y += spacing) { const p1 = transform(minX, y); const p2 = transform(maxX, y); ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke(); } };
-    const LabelManager = () => { 
-        const drawnLabelBounds = []; 
-        const isOverlapping = (rect1, rect2) => !(rect1.x2 < rect2.x1 || rect1.x1 > rect2.x2 || rect1.y2 < rect2.y1 || rect1.y1 > rect2.y2); 
-        return { 
-            draw: (ctx, text, targetX, targetY, obstacles = [], bounds = null) => { 
-                const metrics = ctx.measureText(text); 
-                const w = metrics.width; 
-                const h = metrics.fontBoundingBoxAscent ?? 12; 
-                const padding = 6; 
-                const candidates = [ 
-                    [w/2 + padding, -padding, 'left', 'bottom'], 
-                    [-w/2 - padding, -padding, 'right', 'bottom'], 
-                    [w/2 + padding, h + padding, 'left', 'top'], 
-                    [-w/2 - padding, h + padding, 'right', 'top'], 
-                    [0, -h - padding, 'center', 'bottom'], 
-                    [0, h + padding, 'center', 'top'], 
-                    [w/2 + padding, h/2, 'left', 'middle'], 
+    const LabelManager = () => {
+        const drawnLabels = []; // 描画したラベル情報をすべて保存する配列
+        const isOverlapping = (rect1, rect2) => !(rect1.x2 < rect2.x1 || rect1.x1 > rect2.x2 || rect1.y2 < rect2.y1 || rect1.y1 > rect2.y2);
+        return {
+            draw: (ctx, text, targetX, targetY, obstacles = [], options = {}) => {
+                const bounds = options.bounds || null;
+                const metrics = ctx.measureText(text);
+                const w = metrics.width;
+                const h = metrics.fontBoundingBoxAscent ?? 12;
+                const padding = 6;
+                const candidates = [
+                    [w/2 + padding, -padding, 'left', 'bottom'],
+                    [-w/2 - padding, -padding, 'right', 'bottom'],
+                    [w/2 + padding, h + padding, 'left', 'top'],
+                    [-w/2 - padding, h + padding, 'right', 'top'],
+                    [0, -h - padding, 'center', 'bottom'],
+                    [0, h + padding, 'center', 'top'],
+                    [w/2 + padding, h/2, 'left', 'middle'],
                     [-w/2 - padding, h/2, 'right', 'middle'],
                     // フォールバック候補（より遠い位置）
-                    [w/2 + padding * 3, -padding * 3, 'left', 'bottom'], 
-                    [-w/2 - padding * 3, -padding * 3, 'right', 'bottom'], 
-                    [0, -h - padding * 3, 'center', 'bottom'], 
+                    [w/2 + padding * 3, -padding * 3, 'left', 'bottom'],
+                    [-w/2 - padding * 3, -padding * 3, 'right', 'bottom'],
+                    [0, -h - padding * 3, 'center', 'bottom'],
                     [0, h + padding * 3, 'center', 'top']
-                ]; 
-                
-                for (const cand of candidates) { 
-                    const x = targetX + cand[0]; 
-                    const y = targetY + cand[1]; 
-                    let rect; 
-                    if (cand[2] === 'left') rect = { x1: x, y1: y - h, x2: x + w, y2: y }; 
-                    else if (cand[2] === 'right') rect = { x1: x - w, y1: y - h, x2: x, y2: y }; 
-                    else rect = { x1: x - w/2, y1: y - h, x2: x + w/2, y2: y }; 
-                    
-                    const paddedRect = {x1: rect.x1 - padding, y1: rect.y1 - padding, x2: rect.x2 + padding, y2: rect.y2 + padding}; 
-                    let isInvalid = false; 
-                    
-                    for (const existingRect of [...drawnLabelBounds, ...obstacles]) { 
-                        if (isOverlapping(paddedRect, existingRect)) { 
-                            isInvalid = true; 
-                            break; 
-                        } 
-                    } 
-                    if (isInvalid) continue; 
-                    
-                    if (bounds) { 
-                        if (paddedRect.x1 < bounds.x1 || paddedRect.x2 > bounds.x2 || paddedRect.y1 < bounds.y1 || paddedRect.y2 > bounds.y2) { 
-                            isInvalid = true; 
-                        } 
-                    } 
-                    if (isInvalid) continue; 
-                    
-                    ctx.textAlign = cand[2]; 
-                    ctx.textBaseline = cand[3]; 
-                    ctx.fillText(text, x, y); 
-                    drawnLabelBounds.push(paddedRect); 
-                    return; 
-                } 
-                
+                ];
+
+                for (const cand of candidates) {
+                    const x = targetX + cand[0];
+                    const y = targetY + cand[1];
+                    let rect;
+                    if (cand[2] === 'left') rect = { x1: x, y1: y - h, x2: x + w, y2: y };
+                    else if (cand[2] === 'right') rect = { x1: x - w, y1: y - h, x2: x, y2: y };
+                    else rect = { x1: x - w/2, y1: y - h, x2: x + w/2, y2: y };
+
+                    const paddedRect = {x1: rect.x1 - padding, y1: rect.y1 - padding, x2: rect.x2 + padding, y2: rect.y2 + padding};
+                    let isInvalid = false;
+
+                    for (const existing of [...drawnLabels.map(l => l.rect), ...obstacles]) {
+                        if (isOverlapping(paddedRect, existing)) {
+                            isInvalid = true;
+                            break;
+                        }
+                    }
+                    if (isInvalid) continue;
+
+                    if (bounds) {
+                        if (paddedRect.x1 < bounds.x1 || paddedRect.x2 > bounds.x2 || paddedRect.y1 < bounds.y1 || paddedRect.y2 > bounds.y2) {
+                            isInvalid = true;
+                        }
+                    }
+                    if (isInvalid) continue;
+
+                    ctx.textAlign = cand[2];
+                    ctx.textBaseline = cand[3];
+                    ctx.fillText(text, x, y);
+
+                    // 編集に必要な情報を保存
+                    const centerX = (rect.x1 + rect.x2) / 2;
+                    const centerY = (rect.y1 + rect.y2) / 2;
+                    drawnLabels.push({
+                        rect: paddedRect,
+                        center: { x: centerX, y: centerY },
+                        width: w + padding * 2,
+                        value: options.value,
+                        type: options.type,
+                        index: options.index,
+                    });
+                    return;
+                }
+
                 // フォールバック: 全候補がブロックされた場合、最初の候補位置に強制表示
                 const fallbackCand = candidates[0];
-                const x = targetX + fallbackCand[0]; 
-                const y = targetY + fallbackCand[1]; 
-                let rect; 
-                if (fallbackCand[2] === 'left') rect = { x1: x, y1: y - h, x2: x + w, y2: y }; 
-                else if (fallbackCand[2] === 'right') rect = { x1: x - w, y1: y - h, x2: x, y2: y }; 
-                else rect = { x1: x - w/2, y1: y - h, x2: x + w/2, y2: y }; 
-                
-                const paddedRect = {x1: rect.x1 - padding, y1: rect.y1 - padding, x2: rect.x2 + padding, y2: rect.y2 + padding}; 
-                ctx.textAlign = fallbackCand[2]; 
-                ctx.textBaseline = fallbackCand[3]; 
-                ctx.fillText(text, x, y); 
-                drawnLabelBounds.push(paddedRect); 
-            }, 
-            clear: () => { 
-                drawnLabelBounds.length = 0; 
-            } 
-        }; 
+                const x = targetX + fallbackCand[0];
+                const y = targetY + fallbackCand[1];
+                let rect;
+                if (fallbackCand[2] === 'left') rect = { x1: x, y1: y - h, x2: x + w, y2: y };
+                else if (fallbackCand[2] === 'right') rect = { x1: x - w, y1: y - h, x2: x, y2: y };
+                else rect = { x1: x - w/2, y1: y - h, x2: x + w/2, y2: y };
+
+                const paddedRect = {x1: rect.x1 - padding, y1: rect.y1 - padding, x2: rect.x2 + padding, y2: rect.y2 + padding};
+                ctx.textAlign = fallbackCand[2];
+                ctx.textBaseline = fallbackCand[3];
+                ctx.fillText(text, x, y);
+
+                // フォールバックの場合も情報を保存
+                const centerX = (rect.x1 + rect.x2) / 2;
+                const centerY = (rect.y1 + rect.y2) / 2;
+                drawnLabels.push({
+                    rect: paddedRect,
+                    center: { x: centerX, y: centerY },
+                    width: w + padding * 2,
+                    value: options.value,
+                    type: options.type,
+                    index: options.index,
+                });
+            },
+            getLabelAt: (x, y) => {
+                // 最も手前に描画されたラベルから逆順に検索
+                for (let i = drawnLabels.length - 1; i >= 0; i--) {
+                    const label = drawnLabels[i];
+                    if (x >= label.rect.x1 && x <= label.rect.x2 && y >= label.rect.y1 && y <= label.rect.y2) {
+                        return label;
+                    }
+                }
+                return null;
+            },
+            clear: () => {
+                drawnLabels.length = 0;
+            }
+        };
     };
     const drawOnCanvas = () => {
         const drawingCtx = getDrawingContext(elements.modelCanvas);
@@ -5047,6 +5096,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const { nodes, members, nodeLoads, memberLoads, memberSelfWeights, nodeSelfWeights } = parseInputs();
             if (nodes.length > 0) {
                 const labelManager = LabelManager();
+                window.lastLabelManager = labelManager; // グローバルにアクセス可能にする
                 const nodeObstacles = nodes.map(n => {
                     const pos = transform(n.x, n.y);
                     const metrics = ctx.measureText(nodes.indexOf(n) + 1);
@@ -10927,6 +10977,141 @@ const loadPreset = (index) => {
             alert('エクセル出力でエラーが発生しました: ' + error.message);
         }
     }
+
+    // ==========================================================================
+    // オンキャンバス直接編集機能
+    // ==========================================================================
+    let activeEditor = null;
+
+    const showInPlaceEditor = (labelInfo) => {
+        // 既存のエディタがあれば削除
+        if (activeEditor) activeEditor.remove();
+
+        const canvasRect = elements.modelCanvas.getBoundingClientRect();
+        const editor = document.createElement('input');
+        editor.type = 'number';
+        editor.className = 'on-canvas-editor';
+        editor.value = labelInfo.value;
+
+        // エディタの位置とサイズを調整
+        editor.style.left = `${canvasRect.left + window.scrollX + labelInfo.center.x}px`;
+        editor.style.top = `${canvasRect.top + window.scrollY + labelInfo.center.y}px`;
+        editor.style.width = `${labelInfo.width + 20}px`; // 少し幅に余裕を持たせる
+
+        document.body.appendChild(editor);
+        activeEditor = editor;
+
+        editor.focus();
+        editor.select();
+
+        const commitEdit = () => {
+            if (!activeEditor) return;
+
+            // エディタの参照を保存してクリア
+            const editorToRemove = activeEditor;
+            activeEditor = null;
+
+            // 値を取得して更新
+            const newValue = parseFloat(editorToRemove.value);
+            if (!isNaN(newValue)) {
+                updateModelData(labelInfo, newValue);
+            }
+
+            // エディタを削除（既に削除されている場合もあるのでtry-catchで保護）
+            try {
+                if (editorToRemove && editorToRemove.parentNode) {
+                    editorToRemove.remove();
+                }
+            } catch (e) {
+                // エディタが既に削除されている場合は無視
+            }
+        };
+
+        const cancelEdit = () => {
+            if (!activeEditor) return;
+
+            // エディタの参照を保存してクリア
+            const editorToRemove = activeEditor;
+            activeEditor = null;
+
+            // エディタを削除
+            try {
+                if (editorToRemove && editorToRemove.parentNode) {
+                    editorToRemove.remove();
+                }
+            } catch (e) {
+                // エディタが既に削除されている場合は無視
+            }
+        };
+
+        editor.addEventListener('blur', commitEdit);
+        editor.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                commitEdit();
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                cancelEdit();
+            }
+        });
+    };
+
+    const updateModelData = (labelInfo, newValue) => {
+        pushState(); // 変更を履歴に保存
+        const { type, index } = labelInfo;
+
+        switch (type) {
+            case 'node-load-px':
+            case 'node-load-py':
+            case 'node-load-mz': {
+                let loadRow = Array.from(elements.nodeLoadsTable.rows).find(r => parseInt(r.cells[0].querySelector('input').value) - 1 === index);
+                if (!loadRow) {
+                    // 荷重行が存在しない場合は新規作成
+                    addRow(elements.nodeLoadsTable, [`<input type="number" value="${index + 1}">`, '<input type="number" value="0">', '<input type="number" value="0">', '<input type="number" value="0">']);
+                    loadRow = elements.nodeLoadsTable.rows[elements.nodeLoadsTable.rows.length - 1];
+                }
+                const cellIndex = { 'node-load-px': 1, 'node-load-py': 2, 'node-load-mz': 3 }[type];
+                loadRow.cells[cellIndex].querySelector('input').value = newValue;
+                break;
+            }
+            case 'member-load-w': {
+                let loadRow = Array.from(elements.memberLoadsTable.rows).find(r => parseInt(r.cells[0].querySelector('input').value) - 1 === index);
+                if (!loadRow) {
+                    addRow(elements.memberLoadsTable, [`<input type="number" value="${index + 1}">`, '<input type="number" value="0">']);
+                    loadRow = elements.memberLoadsTable.rows[elements.memberLoadsTable.rows.length - 1];
+                }
+                loadRow.cells[1].querySelector('input').value = newValue;
+                break;
+            }
+        }
+
+        // データを更新後に即座に再描画
+        drawOnCanvas();
+
+        // 解析結果がある場合は再計算も実行
+        runFullAnalysis();
+    };
+
+    elements.modelCanvas.addEventListener('dblclick', (e) => {
+        // 他のポップアップが表示されている場合は何もしない
+        if (document.querySelector('.popup-box[style*="display: block"]')) {
+            return;
+        }
+
+        const rect = elements.modelCanvas.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+
+        // labelManagerはdrawOnCanvas内で生成されるため、グローバルからアクセス
+        if (window.lastLabelManager) {
+            const clickedLabel = window.lastLabelManager.getLabelAt(mouseX, mouseY);
+            if (clickedLabel && clickedLabel.type && clickedLabel.index !== undefined) {
+                e.preventDefault();
+                e.stopPropagation();
+                showInPlaceEditor(clickedLabel);
+            }
+        }
+    });
 });
 
 // ==========================================================================
