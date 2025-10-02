@@ -1672,16 +1672,25 @@ document.addEventListener('DOMContentLoaded', () => {
     // ポップアップの初期化（確実に非表示にする）
     if (elements.memberPropsPopup) {
         elements.memberPropsPopup.style.display = 'none';
+        elements.memberPropsPopup.style.visibility = 'hidden';
         console.log('✅ memberPropsPopup初期化完了 (非表示設定)');
+    }
+    if (elements.nodePropsPopup) {
+        elements.nodePropsPopup.style.display = 'none';
+        elements.nodePropsPopup.style.visibility = 'hidden';
+        console.log('✅ nodePropsPopup初期化完了 (非表示設定)');
     }
     if (elements.nodeLoadPopup) {
         elements.nodeLoadPopup.style.display = 'none';
+        elements.nodeLoadPopup.style.visibility = 'hidden';
     }
     if (elements.nodeCoordsPopup) {
         elements.nodeCoordsPopup.style.display = 'none';
+        elements.nodeCoordsPopup.style.visibility = 'hidden';
     }
     if (elements.addMemberPopup) {
         elements.addMemberPopup.style.display = 'none';
+        elements.addMemberPopup.style.visibility = 'hidden';
     }
     
     // ツールチップ表示の状態管理
@@ -7240,10 +7249,28 @@ document.addEventListener('DOMContentLoaded', () => {
     elements.modelCanvas.addEventListener('contextmenu', (e) => {
         e.preventDefault();
         const rect = elements.modelCanvas.getBoundingClientRect(), mouseX = e.clientX-rect.left, mouseY = e.clientY-rect.top;
-        elements.nodeContextMenu.style.display='none'; elements.memberPropsPopup.style.display='none'; elements.nodeLoadPopup.style.display='none'; elements.nodeCoordsPopup.style.display='none';
+        
+        // 全てのポップアップとメニューを確実に非表示（null チェック付き）
+        if (elements.nodeContextMenu) elements.nodeContextMenu.style.display='none';
+        if (elements.memberPropsPopup) {
+            elements.memberPropsPopup.style.display='none';
+            elements.memberPropsPopup.style.visibility='hidden';
+        }
+        if (elements.nodePropsPopup) {
+            elements.nodePropsPopup.style.display='none';
+            elements.nodePropsPopup.style.visibility='hidden';
+        }
+        if (elements.nodeLoadPopup) {
+            elements.nodeLoadPopup.style.display='none';
+            elements.nodeLoadPopup.style.visibility='hidden';
+        }
+        if (elements.nodeCoordsPopup) {
+            elements.nodeCoordsPopup.style.display='none';
+            elements.nodeCoordsPopup.style.visibility='hidden';
+        }
         
         // デバッグログを追加
-        console.log('右クリックイベント発生');
+        console.log('🖱️ 右クリックイベント発生 - マウス位置:', { mouseX, mouseY });
         console.log('現在の複数選択状態:', {
             selectedMembers: Array.from(selectedMembers),
             selectedNodes: Array.from(selectedNodes),
@@ -7253,26 +7280,28 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // 複数選択状態をチェック
         if (selectedMembers.size > 1) {
-            console.log('複数部材選択時の右クリック:', Array.from(selectedMembers));
+            console.log('✅ 複数部材選択時の右クリック - 一括編集メニュー表示:', Array.from(selectedMembers));
             showBulkEditMenu(e.pageX, e.pageY);
             return;
         } else if (selectedNodes.size > 1) {
-            console.log('複数節点選択時の右クリック:', Array.from(selectedNodes));
+            console.log('✅ 複数節点選択時の右クリック - 一括編集メニュー表示:', Array.from(selectedNodes));
             showBulkNodeEditMenu(e.pageX, e.pageY);
             return;
-        } else {
-            console.log('単一選択または選択なし - 通常の右クリック処理を継続');
         }
         
+        console.log('📍 単一選択判定開始');
         selectedNodeIndex = getNodeAt(mouseX, mouseY);
-        let loadedNodeIndex = -1; if (selectedNodeIndex === -1) { loadedNodeIndex = getNodeLoadAt(mouseX, mouseY); }
+        let loadedNodeIndex = -1; 
+        if (selectedNodeIndex === -1) { 
+            loadedNodeIndex = getNodeLoadAt(mouseX, mouseY); 
+        }
         selectedMemberIndex = getMemberAt(mouseX, mouseY);
 
         // window変数も同期
         window.selectedNodeIndex = selectedNodeIndex;
         window.selectedMemberIndex = selectedMemberIndex;
 
-        console.log('右クリック後の選択状態設定:', {
+        console.log('✅ 右クリック後の選択状態:', {
             selectedNodeIndex,
             selectedMemberIndex,
             loadedNodeIndex,
@@ -7282,35 +7311,51 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (loadedNodeIndex !== -1) {
             selectedNodeIndex = loadedNodeIndex;
+            console.log('💡 荷重編集ポップアップ表示開始 - 節点:', selectedNodeIndex + 1);
             const currentLoads = Array.from(elements.nodeLoadsTable.rows).find(row => parseInt(row.cells[0].querySelector('input').value)-1 === selectedNodeIndex);
             document.getElementById('popup-px').value=currentLoads?currentLoads.cells[1].querySelector('input').value:'0';
             document.getElementById('popup-py').value=currentLoads?currentLoads.cells[2].querySelector('input').value:'0';
             document.getElementById('popup-mz').value=currentLoads?currentLoads.cells[3].querySelector('input').value:'0';
             
-            // ポップアップを画面中央に表示
+            // ポップアップを画面中央に表示（null チェック付き）
             const popup = elements.nodeLoadPopup;
-            popup.style.display = 'block';
-            
-            // ポップアップのサイズを取得（デフォルト値を設定）
-            const popupRect = popup.getBoundingClientRect();
-            const popupWidth = popupRect.width || 300;  // デフォルト幅
-            const popupHeight = popupRect.height || 250; // デフォルト高さ
-            const windowWidth = window.innerWidth;
-            const windowHeight = window.innerHeight;
-            const availableHeight = Math.min(windowHeight, document.documentElement.clientHeight);
-            const minMargin = 10;
-            const bottomMargin = 20; // タスクバー対策
-            
-            // 画面内に収まるように配置
-            const left = Math.max(minMargin, Math.min((windowWidth - popupWidth) / 2, windowWidth - popupWidth - minMargin));
-            const top = Math.max(minMargin, Math.min((availableHeight - popupHeight) / 2, availableHeight - popupHeight - bottomMargin));
-            
-            popup.style.left = `${left}px`;
-            popup.style.top = `${top}px`;
-            popup.style.position = 'fixed';
+            if (popup) {
+                popup.style.display = 'block';
+                popup.style.visibility = 'visible';
+                console.log('✅ 荷重編集ポップアップ表示設定完了');
+                
+                // ポップアップのサイズを取得（デフォルト値を設定）
+                const popupRect = popup.getBoundingClientRect();
+                const popupWidth = popupRect.width || 300;  // デフォルト幅
+                const popupHeight = popupRect.height || 250; // デフォルト高さ
+                const windowWidth = window.innerWidth;
+                const windowHeight = window.innerHeight;
+                const availableHeight = Math.min(windowHeight, document.documentElement.clientHeight);
+                const minMargin = 10;
+                const bottomMargin = 20; // タスクバー対策
+                
+                // 画面内に収まるように配置
+                const left = Math.max(minMargin, Math.min((windowWidth - popupWidth) / 2, windowWidth - popupWidth - minMargin));
+                const top = Math.max(minMargin, Math.min((availableHeight - popupHeight) / 2, availableHeight - popupHeight - bottomMargin));
+                
+                popup.style.left = `${left}px`;
+                popup.style.top = `${top}px`;
+                popup.style.position = 'fixed';
+            } else {
+                console.error('❌ nodeLoadPopup 要素が見つかりません');
+            }
         } else if (selectedNodeIndex !== -1) {
-            elements.nodeContextMenu.style.display='block'; elements.nodeContextMenu.style.left=`${e.pageX}px`; elements.nodeContextMenu.style.top=`${e.pageY}px`;
+            console.log('💡 節点コンテキストメニュー表示 - 節点:', selectedNodeIndex + 1);
+            if (elements.nodeContextMenu) {
+                elements.nodeContextMenu.style.display='block'; 
+                elements.nodeContextMenu.style.left=`${e.pageX}px`; 
+                elements.nodeContextMenu.style.top=`${e.pageY}px`;
+                console.log('✅ 節点コンテキストメニュー表示完了');
+            } else {
+                console.error('❌ nodeContextMenu 要素が見つかりません');
+            }
         } else if (selectedMemberIndex !== -1) {
+            console.log('💡 部材プロパティポップアップ表示開始 - 部材:', selectedMemberIndex + 1);
             const memberRow = elements.membersTable.rows[selectedMemberIndex];
             const e_select = memberRow.cells[3].querySelector('select'), e_input = memberRow.cells[3].querySelector('input[type="number"]');
             const currentE = (e_select.value === 'custom') ? e_input.value : e_select.value;
@@ -7463,9 +7508,20 @@ document.addEventListener('DOMContentLoaded', () => {
             const memberLoadRow = Array.from(elements.memberLoadsTable.rows).find(row => parseInt(row.cells[0].querySelector('input').value)-1 === selectedMemberIndex);
             document.getElementById('popup-w').value = memberLoadRow ? memberLoadRow.cells[1].querySelector('input').value : '0';
             
-            // ポップアップを部材に重ならない位置に表示
+            // ポップアップを部材に重ならない位置に表示（null チェック付き）
             const popup = elements.memberPropsPopup;
+            if (!popup) {
+                console.error('❌ memberPropsPopup 要素が見つかりません');
+                return;
+            }
+            
             popup.style.display = 'block';
+            popup.style.visibility = 'visible';
+            console.log('📦 部材プロパティポップアップ - 表示設定:', {
+                display: popup.style.display,
+                visibility: popup.style.visibility,
+                position: popup.style.position
+            });
             
             // ポップアップのサイズを取得（デフォルト値を設定）
             const popupRect = popup.getBoundingClientRect();
@@ -7563,6 +7619,18 @@ document.addEventListener('DOMContentLoaded', () => {
             popup.style.left = `${left}px`;
             popup.style.top = `${top}px`;
             popup.style.position = 'fixed';
+            popup.style.zIndex = '10000';
+            
+            console.log('✅ 部材プロパティポップアップ表示完了:', {
+                left: popup.style.left,
+                top: popup.style.top,
+                display: popup.style.display,
+                visibility: popup.style.visibility,
+                position: popup.style.position,
+                zIndex: popup.style.zIndex
+            });
+        } else {
+            console.log('❌ クリック位置に節点・部材・荷重が見つかりませんでした');
         }
 
         // 選択状態をハイライト表示するため再描画
@@ -7966,13 +8034,26 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('popup-mz').value = loadRow ? loadRow.cells[3].querySelector('input').value : '0';
         
         const popup = elements.nodePropsPopup;
+        if (!popup) {
+            console.error('❌ nodePropsPopup 要素が見つかりません');
+            return;
+        }
+        
         popup.style.display = 'block';
+        popup.style.visibility = 'visible';
 
         // ポップアップを画面中央に配置
         const popupRect = popup.getBoundingClientRect();
         popup.style.left = `${(window.innerWidth - popupRect.width) / 2}px`;
         popup.style.top = `${(window.innerHeight - popupRect.height) / 2}px`;
         popup.style.position = 'fixed';
+        popup.style.zIndex = '10000';
+        
+        console.log('✅ 節点プロパティポップアップ表示完了:', {
+            nodeIndex: selectedNodeIndex + 1,
+            display: popup.style.display,
+            visibility: popup.style.visibility
+        });
     };
 
     // 新しい節点プロパティポップアップの保存ボタンの処理
