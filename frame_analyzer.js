@@ -1595,6 +1595,8 @@ document.addEventListener('DOMContentLoaded', () => {
         nodeContextMenu: document.getElementById('node-context-menu'),
         memberPropsPopup: document.getElementById('member-props-popup'),
         nodePropsPopup: document.getElementById('node-props-popup'),
+        nodeLoadPopup: document.getElementById('node-load-popup'),
+        nodeCoordsPopup: document.getElementById('node-coords-popup'),
         addMemberPopup: document.getElementById('add-member-popup'),
         gridToggle: document.getElementById('grid-toggle'),
         memberInfoToggle: document.getElementById('member-info-toggle'),
