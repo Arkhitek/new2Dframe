@@ -231,10 +231,24 @@ function createMemberMesh(member, nodes) {
     if (memberLength <= 0) return null;
 
     if (!member.sectionInfo || !member.sectionInfo.rawDims) {
-        const I = member.I || 1000, Z = member.Z || 100, A = member.A || 10;
-        const h = (2 * I / Z) * 10 * 20;
-        const b = ((A * 100 / h) || h / 2) * 20;
-        member.sectionInfo = { rawDims: { H: h, B: b, t1: b/6, t2: h/6 }, typeKey: 'estimated' };
+        // 推定断面は円形で計算
+        // member.Aはm²単位なので、cm²に変換
+        const A_m2 = member.A || 1e-3; // m²
+        const A_cm2 = A_m2 * 1e4; // m² → cm²
+
+        // A = π * r^2 より r = sqrt(A / π)
+        const radius_cm = Math.sqrt(A_cm2 / Math.PI); // cm
+        const diameter_cm = radius_cm * 2; // cm
+        const diameter_mm = diameter_cm * 10; // mm に変換
+
+        member.sectionInfo = {
+            rawDims: {
+                D: diameter_mm,  // 実際の直径（mm）を保存
+                D_scaled: diameter_mm  // 3D表示用の直径（スケーリングなし）
+            },
+            typeKey: 'estimated',
+            label: '推定断面（円形）'
+        };
     }
 
     const shape = createSectionShape(member.sectionInfo, member);
@@ -443,19 +457,26 @@ function createSectionShape(sectionInfo, member) {
             shape.absarc(0, 0, radius, 0, Math.PI * 2, false);
             break;
         }
+        case 'estimated':
         default: {
-            const I = member.I || 1000;
-            const Z = member.Z || 100;
-            const A = member.A || 10;
-            const h = (2 * I / Z) * 10 * 20;
-            const b = ((A * 100 / h) || h / 2) * 20;
-            const halfH = (h * MM_TO_M) / 2;
-            const halfB = (b * MM_TO_M) / 2;
-            shape.moveTo(-halfB, -halfH);
-            shape.lineTo(halfB, -halfH);
-            shape.lineTo(halfB, halfH);
-            shape.lineTo(-halfB, halfH);
-            shape.lineTo(-halfB, -halfH);
+            // 推定断面は円形で表示
+            // 3D表示用のスケール済み直径を使用
+            if (dims.D_scaled) {
+                const radius = (dims.D_scaled * MM_TO_M) / 2;
+                shape.absarc(0, 0, radius, 0, Math.PI * 2, false);
+            } else if (dims.D) {
+                // D_scaledがない場合はDを使用（スケーリングなし）
+                const radius = (dims.D * MM_TO_M) / 2;
+                shape.absarc(0, 0, radius, 0, Math.PI * 2, false);
+            } else {
+                // 旧データ対応: memberから直接計算
+                const A_m2 = member.A || 1e-3; // m²
+                const A_cm2 = A_m2 * 1e4; // m² → cm²
+                const radius_cm = Math.sqrt(A_cm2 / Math.PI);
+                const diameter_mm = radius_cm * 2 * 10; // cm → mm（スケーリングなし）
+                const radius = (diameter_mm * MM_TO_M) / 2;
+                shape.absarc(0, 0, radius, 0, Math.PI * 2, false);
+            }
             break;
         }
     }
@@ -473,7 +494,12 @@ function getSectionName(member) {
 
     // typeKeyから推定の場合
     if (typeKey === 'estimated') {
-        return '推定断面';
+        // 直径情報がある場合は表示（実際の直径をそのまま使用）
+        if (dims && dims.D) {
+            const diameter = dims.D.toFixed(1);
+            return `推定断面 φ${diameter}`;
+        }
+        return '推定断面（円形）';
     }
 
     // rawDimsがない場合は既存のlabelを使用
