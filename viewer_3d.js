@@ -275,7 +275,8 @@ function createMemberMesh(member, nodes) {
         color: 0x000000,
         linewidth: 1,
         transparent: true,
-        opacity: 0.5
+        opacity: 0.5,
+        depthTest: false // 正面からも見えるように
     });
     const edges = new THREE.LineSegments(edgesGeometry, edgesMaterial);
     mesh.add(edges);
