@@ -1,0 +1,564 @@
+// viewer_3d.js
+
+if (typeof THREE === 'undefined') {
+    alert('3D描画ライブラリ(Three.js)が読み込まれていません。');
+    throw new Error('Three.js not found');
+}
+
+// 3Dシーン用のグローバル変数
+let scene, camera, renderer, controls, labelRenderer, animationFrameId;
+const canvasContainer = document.getElementById('canvas-3d-container');
+const infoPanel = document.getElementById('info-panel');
+
+// ラベルグループ（表示/非表示制御用）
+let nodeLabelsGroup, memberLabelsGroup, sectionLabelsGroup;
+
+// ラベル表示状態
+let labelVisibility = {
+    nodes: true,
+    members: true,
+    sections: true
+};
+
+/**
+ * 3Dシーンの初期化
+ */
+function init() {
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xf0f0f0);
+
+    const aspect = canvasContainer.clientWidth / canvasContainer.clientHeight;
+    camera = new THREE.PerspectiveCamera(75, aspect, 0.1, 1000);
+    camera.position.set(0, 5, 20);
+
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(canvasContainer.clientWidth, canvasContainer.clientHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    canvasContainer.appendChild(renderer.domElement);
+
+    labelRenderer = new THREE.CSS2DRenderer();
+    labelRenderer.setSize(canvasContainer.clientWidth, canvasContainer.clientHeight);
+    labelRenderer.domElement.style.position = 'absolute';
+    labelRenderer.domElement.style.top = '0';
+    labelRenderer.domElement.style.pointerEvents = 'none';
+    canvasContainer.appendChild(labelRenderer.domElement);
+
+    controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+    scene.add(ambientLight);
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.9);
+    directionalLight.position.set(50, 50, 50).normalize();
+    scene.add(directionalLight);
+
+    animate();
+
+    window.addEventListener('resize', onWindowResize);
+    window.addEventListener('message', receiveModelData);
+
+    // チェックボックスのイベントリスナー設定
+    setupLabelControls();
+}
+
+/**
+ * メインウィンドウからのデータ受信と3Dモデル更新
+ */
+function receiveModelData(event) {
+    if (event.data && event.data.type === 'updateModel') {
+        if (infoPanel) {
+            const p = infoPanel.querySelector('p:last-child');
+            if(p) p.textContent = `最終更新: ${new Date().toLocaleTimeString()}`;
+        }
+        update3DModel(event.data.data);
+    }
+}
+
+/**
+ * 3Dモデルの再描画
+ */
+function update3DModel(data) {
+    if (!data || !data.nodes || !data.members) return;
+
+    // シーン内の全オブジェクトを完全に削除する再帰関数
+    function disposeObject(obj) {
+        if (obj.geometry) {
+            obj.geometry.dispose();
+        }
+        if (obj.material) {
+            if (Array.isArray(obj.material)) {
+                obj.material.forEach(m => m.dispose());
+            } else {
+                obj.material.dispose();
+            }
+        }
+        // 子要素を再帰的に削除
+        while (obj.children.length > 0) {
+            const child = obj.children[0];
+            disposeObject(child);
+            obj.remove(child);
+        }
+    }
+
+    // シーン内の全オブジェクトを削除（ライトは除く）
+    const objectsToRemove = [];
+    scene.children.forEach(child => {
+        if (!child.isLight) {
+            objectsToRemove.push(child);
+        }
+    });
+    objectsToRemove.forEach(obj => {
+        disposeObject(obj);
+        scene.remove(obj);
+    });
+
+    // 新しいモデルを構築
+    build3DModel(scene, data.nodes, data.members);
+}
+
+function animate() {
+    animationFrameId = requestAnimationFrame(animate);
+    controls.update();
+    renderer.render(scene, camera);
+    labelRenderer.render(scene, camera);
+}
+
+function onWindowResize() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    labelRenderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+// --- 以下、frame_analyzer.jsから移植した3Dモデル構築ロジック ---
+
+function build3DModel(scene, nodes, members) {
+    const memberGroup = new THREE.Group();
+    const nodeMaterial = new THREE.MeshLambertMaterial({ color: 0x1565C0 });
+    const nodeGeometry = new THREE.BoxGeometry(0.4, 0.4, 0.4);
+
+    // ラベルグループを初期化
+    nodeLabelsGroup = new THREE.Group();
+    memberLabelsGroup = new THREE.Group();
+    sectionLabelsGroup = new THREE.Group();
+
+    nodes.forEach((node, i) => {
+        const nodeMesh = new THREE.Mesh(nodeGeometry, nodeMaterial);
+        nodeMesh.position.set(node.x, node.y, 0);
+        memberGroup.add(nodeMesh);
+
+        const nodeDiv = document.createElement('div');
+        nodeDiv.className = 'label';
+        nodeDiv.textContent = `N${i + 1}`;
+        const nodeLabel = new THREE.CSS2DObject(nodeDiv);
+        nodeLabel.position.set(node.x, node.y, 0.5);
+        nodeLabelsGroup.add(nodeLabel);
+    });
+
+    members.forEach((member, index) => {
+        try {
+            const memberMesh = createMemberMesh(member, nodes);
+            if (memberMesh) {
+                memberGroup.add(memberMesh);
+
+                const p1 = nodes[member.i];
+                const p2 = nodes[member.j];
+                const centerX = (p1.x + p2.x) / 2;
+                const centerY = (p1.y + p2.y) / 2;
+
+                // 部材番号ラベル
+                const memberDiv = document.createElement('div');
+                memberDiv.className = 'label';
+                memberDiv.textContent = `M${index + 1}`;
+                const memberLabel = new THREE.CSS2DObject(memberDiv);
+                memberLabel.position.set(centerX, centerY, 0);
+                memberLabelsGroup.add(memberLabel);
+
+                // 断面名称ラベル（部材ラベルの少し下に配置）
+                const sectionName = getSectionName(member);
+                if (sectionName) {
+                    const sectionDiv = document.createElement('div');
+                    sectionDiv.className = 'label-section';
+                    sectionDiv.textContent = sectionName;
+                    const sectionLabel = new THREE.CSS2DObject(sectionDiv);
+                    sectionLabel.position.set(centerX, centerY - 0.3, 0);
+                    sectionLabelsGroup.add(sectionLabel);
+                }
+            }
+        } catch(e) {
+            console.warn(`部材 ${member.i+1}-${member.j+1} の3Dメッシュ作成に失敗しました:`, e);
+        }
+    });
+
+    scene.add(memberGroup);
+    scene.add(nodeLabelsGroup);
+    scene.add(memberLabelsGroup);
+    scene.add(sectionLabelsGroup);
+
+    // 現在の表示状態を適用
+    setGroupVisibility(nodeLabelsGroup, labelVisibility.nodes);
+    setGroupVisibility(memberLabelsGroup, labelVisibility.members);
+    setGroupVisibility(sectionLabelsGroup, labelVisibility.sections);
+
+    const box = new THREE.Box3().setFromObject(memberGroup);
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+    const maxDim = Math.max(size.x, size.y, size.z);
+
+    if (!isFinite(maxDim) || maxDim === 0) {
+        camera.position.set(0, 0, 50);
+        controls.target.set(0, 0, 0);
+    } else {
+        const fov = camera.fov * (Math.PI / 180);
+        let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
+        cameraZ *= 1.5;
+
+        camera.position.set(center.x, center.y, center.z + cameraZ);
+        controls.target.copy(center);
+    }
+    controls.update();
+}
+
+function createMemberMesh(member, nodes) {
+    const nodeI = nodes[member.i];
+    const nodeJ = nodes[member.j];
+
+    if (!nodeI || !nodeJ) return null;
+
+    const p1 = new THREE.Vector3(nodeI.x, nodeI.y, 0);
+    const p2 = new THREE.Vector3(nodeJ.x, nodeJ.y, 0);
+    const memberLength = p1.distanceTo(p2);
+    if (memberLength <= 0) return null;
+
+    if (!member.sectionInfo || !member.sectionInfo.rawDims) {
+        const I = member.I || 1000, Z = member.Z || 100, A = member.A || 10;
+        const h = (2 * I / Z) * 10 * 20;
+        const b = ((A * 100 / h) || h / 2) * 20;
+        member.sectionInfo = { rawDims: { H: h, B: b, t1: b/6, t2: h/6 }, typeKey: 'estimated' };
+    }
+
+    const shape = createSectionShape(member.sectionInfo, member);
+    if (!shape) return null;
+
+    const extrudeSettings = { depth: memberLength, bevelEnabled: false };
+    const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+
+    const isEstimated = member.sectionInfo.typeKey === 'estimated';
+    const material = new THREE.MeshLambertMaterial({ color: isEstimated ? 0xFF8C00 : 0x607D8B });
+    const mesh = new THREE.Mesh(geometry, material);
+
+    const direction = new THREE.Vector3().subVectors(p2, p1).normalize();
+    const isVertical = Math.abs(direction.y) > 0.95;
+
+    mesh.position.copy(p1);
+    mesh.up.set(isVertical ? 1 : 0, isVertical ? 0 : 1, 0);
+    mesh.lookAt(p2);
+
+    if (member.sectionAxis && member.sectionAxis.key === 'y') {
+        mesh.rotateZ(Math.PI / 2);
+    }
+
+    const hingeGroup = new THREE.Group();
+    const redMaterial = new THREE.MeshLambertMaterial({ color: 0xFF0000 });
+    const whiteMaterial = new THREE.MeshLambertMaterial({ color: 0xFFFFFF });
+
+    const createHinge = () => {
+        const outer = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.05, 32), redMaterial);
+        const inner = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.051, 32), whiteMaterial);
+        outer.rotation.x = inner.rotation.x = Math.PI / 2;
+        const group = new THREE.Group();
+        group.add(outer, inner);
+        return group;
+    };
+
+    if (member.i_conn === 'pinned') {
+        const hingeI = createHinge();
+        hingeI.position.copy(p1).addScaledVector(direction, 0.35);
+        hingeGroup.add(hingeI);
+    }
+
+    if (member.j_conn === 'pinned') {
+        const hingeJ = createHinge();
+        hingeJ.position.copy(p2).addScaledVector(direction, -0.35);
+        hingeGroup.add(hingeJ);
+    }
+
+    if (hingeGroup.children.length > 0) {
+        const combinedGroup = new THREE.Group();
+        combinedGroup.add(mesh, hingeGroup);
+        return combinedGroup;
+    }
+
+    return mesh;
+}
+
+function createSectionShape(sectionInfo, member) {
+    const dims = sectionInfo.rawDims;
+    const typeKey = sectionInfo.typeKey;
+    if (!dims || !typeKey) return null;
+    const shape = new THREE.Shape();
+    const MM_TO_M = 0.001;
+
+    switch (typeKey) {
+        case 'hkatakou_hiro':
+        case 'hkatakou_naka':
+        case 'hkatakou_hoso':
+        case 'ikatakou':
+        case 'keiryouhkatakou':
+        case 'keiryourippuhkatakou': {
+            const { H, B, t1, t2 } = dims;
+            if (!H || !B || !t1 || !t2) return null;
+            const halfH = (H * MM_TO_M) / 2;
+            const halfB = (B * MM_TO_M) / 2;
+            const halfT1 = (t1 * MM_TO_M) / 2;
+            const t2m = t2 * MM_TO_M;
+            shape.moveTo(-halfB, halfH);
+            shape.lineTo(halfB, halfH);
+            shape.lineTo(halfB, halfH - t2m);
+            shape.lineTo(halfT1, halfH - t2m);
+            shape.lineTo(halfT1, -halfH + t2m);
+            shape.lineTo(halfB, -halfH + t2m);
+            shape.lineTo(halfB, -halfH);
+            shape.lineTo(-halfB, -halfH);
+            shape.lineTo(-halfB, -halfH + t2m);
+            shape.lineTo(-halfT1, -halfH + t2m);
+            shape.lineTo(-halfT1, halfH - t2m);
+            shape.lineTo(-halfB, halfH - t2m);
+            shape.lineTo(-halfB, halfH);
+            break;
+        }
+        case 'seihoukei':
+        case 'tyouhoukei': {
+            const A = dims.A, B = dims.B || A, t = dims.t;
+            if (!A || !B || !t) return null;
+            const halfA = (A * MM_TO_M) / 2;
+            const halfB = (B * MM_TO_M) / 2;
+            const tm = t * MM_TO_M;
+            shape.moveTo(-halfB, -halfA);
+            shape.lineTo(halfB, -halfA);
+            shape.lineTo(halfB, halfA);
+            shape.lineTo(-halfB, halfA);
+            shape.lineTo(-halfB, -halfA);
+            const hole = new THREE.Path();
+            hole.moveTo(-halfB + tm, -halfA + tm);
+            hole.lineTo(-halfB + tm, halfA - tm);
+            hole.lineTo(halfB - tm, halfA - tm);
+            hole.lineTo(halfB - tm, -halfA + tm);
+            hole.lineTo(-halfB + tm, -halfA + tm);
+            shape.holes.push(hole);
+            break;
+        }
+        case 'koukan': {
+            const { D, t } = dims;
+            if (!D || !t) return null;
+            const Dm = D * MM_TO_M;
+            const tm = t * MM_TO_M;
+            const outerRadius = Dm / 2;
+            const innerRadius = outerRadius - tm;
+            shape.absarc(0, 0, outerRadius, 0, Math.PI * 2, false);
+            const hole = new THREE.Path();
+            hole.absarc(0, 0, innerRadius, 0, Math.PI * 2, true);
+            shape.holes.push(hole);
+            break;
+        }
+        case 'mizogatakou':
+        case 'keimizogatakou': {
+            const { H, B, t1, t2, A, t } = dims;
+            const height = H * MM_TO_M;
+            const flangeWidth = (B || A) * MM_TO_M;
+            const webThick = (t1 || t) * MM_TO_M;
+            const flangeThick = (t2 || t) * MM_TO_M;
+            if(!height || !flangeWidth || !webThick || !flangeThick) return null;
+            const halfH = height / 2;
+            shape.moveTo(0, halfH);
+            shape.lineTo(flangeWidth, halfH);
+            shape.lineTo(flangeWidth, halfH - flangeThick);
+            shape.lineTo(webThick, halfH - flangeThick);
+            shape.lineTo(webThick, -halfH + flangeThick);
+            shape.lineTo(flangeWidth, -halfH + flangeThick);
+            shape.lineTo(flangeWidth, -halfH);
+            shape.lineTo(0, -halfH);
+            shape.lineTo(0, halfH);
+            break;
+        }
+        case 'rippumizokatakou': {
+            const { H, A, C, t } = dims;
+            if (!H || !A || !C || !t) return null;
+            const height = H * MM_TO_M;
+            const flangeWidth = A * MM_TO_M;
+            const lip = C * MM_TO_M;
+            const thick = t * MM_TO_M;
+            const halfH = height / 2;
+            shape.moveTo(0, halfH);
+            shape.lineTo(flangeWidth, halfH);
+            shape.lineTo(flangeWidth, halfH - lip);
+            shape.lineTo(flangeWidth - thick, halfH - lip);
+            shape.lineTo(flangeWidth - thick, halfH - thick);
+            shape.lineTo(thick, halfH - thick);
+            shape.lineTo(thick, -halfH + thick);
+            shape.lineTo(flangeWidth-thick, -halfH+thick);
+            shape.lineTo(flangeWidth-thick, -halfH+lip);
+            shape.lineTo(flangeWidth,-halfH+lip);
+            shape.lineTo(flangeWidth,-halfH);
+            shape.lineTo(0,-halfH);
+            shape.lineTo(0,halfH);
+            break;
+        }
+        case 'touhenyamakatakou':
+        case 'futouhenyamagata': {
+            const { A, B, t } = dims;
+            const a = (A || 0) * MM_TO_M;
+            const b = (B || A || 0) * MM_TO_M;
+            const thick = (t || 0) * MM_TO_M;
+            if (!a || !b || !thick) return null;
+            shape.moveTo(0, a);
+            shape.lineTo(thick, a);
+            shape.lineTo(thick, thick);
+            shape.lineTo(b, thick);
+            shape.lineTo(b, 0);
+            shape.lineTo(0, 0);
+            shape.lineTo(0, a);
+            break;
+        }
+        case '矩形':
+        case 'rectangular': {
+            const { H, B } = dims;
+            if (!H || !B) return null;
+            const height = H * MM_TO_M;
+            const width = B * MM_TO_M;
+            const halfH = height / 2;
+            const halfB = width / 2;
+            shape.moveTo(-halfB, -halfH);
+            shape.lineTo(halfB, -halfH);
+            shape.lineTo(halfB, halfH);
+            shape.lineTo(-halfB, halfH);
+            shape.lineTo(-halfB, -halfH);
+            break;
+        }
+        case '円形':
+        case 'circular': {
+            const { D } = dims;
+            if (!D) return null;
+            const radius = (D * MM_TO_M) / 2;
+            shape.absarc(0, 0, radius, 0, Math.PI * 2, false);
+            break;
+        }
+        default: {
+            const I = member.I || 1000;
+            const Z = member.Z || 100;
+            const A = member.A || 10;
+            const h = (2 * I / Z) * 10 * 20;
+            const b = ((A * 100 / h) || h / 2) * 20;
+            const halfH = (h * MM_TO_M) / 2;
+            const halfB = (b * MM_TO_M) / 2;
+            shape.moveTo(-halfB, -halfH);
+            shape.lineTo(halfB, -halfH);
+            shape.lineTo(halfB, halfH);
+            shape.lineTo(-halfB, halfH);
+            shape.lineTo(-halfB, -halfH);
+            break;
+        }
+    }
+    return shape;
+}
+
+/**
+ * 部材の断面名称を取得（板厚まで含んだ完全な名称）
+ */
+function getSectionName(member) {
+    if (!member.sectionInfo) return null;
+
+    const typeKey = member.sectionInfo.typeKey;
+    const dims = member.sectionInfo.rawDims;
+
+    // typeKeyから推定の場合
+    if (typeKey === 'estimated') {
+        return '推定断面';
+    }
+
+    // rawDimsがない場合は既存のlabelを使用
+    if (!dims) {
+        return member.sectionInfo.label || null;
+    }
+
+    // 形状タイプに応じて板厚まで含んだ名称を生成
+    switch (typeKey) {
+        case 'hkatakou_hiro':
+        case 'hkatakou_naka':
+        case 'hkatakou_hoso':
+            return `H-${dims.H}×${dims.B}×${dims.t1}×${dims.t2}`;
+        case 'ikatakou':
+            return `I-${dims.H}×${dims.B}×${dims.t1}×${dims.t2}`;
+        case 'keiryouhkatakou':
+            return `H-${dims.H}×${dims.B}×${dims.t1}×${dims.t2}`;
+        case 'keiryourippuhkatakou':
+            return `H-${dims.H}×${dims.B}×${dims.t1}×${dims.t2}`;
+        case 'seihoukei':
+        case 'tyouhoukei':
+            return `□-${dims.A}×${dims.B || dims.A}×${dims.t}`;
+        case 'koukan':
+            return `○-${dims.D}×${dims.t}`;
+        case 'mizogatakou':
+        case 'keimizogatakou':
+            return `C-${dims.H}×${dims.B || dims.A}×${dims.t1 || dims.t}×${dims.t2 || dims.t}`;
+        case 'rippumizokatakou':
+            return `C-${dims.H}×${dims.A}×${dims.C}×${dims.t}`;
+        case 'touhenyamakatakou':
+            return `L-${dims.A}×${dims.A}×${dims.t}`;
+        case 'futouhenyamagata':
+            return `L-${dims.A}×${dims.B}×${dims.t}`;
+        case '矩形':
+        case 'rectangular':
+            return `矩形-${dims.H}×${dims.B}`;
+        case '円形':
+        case 'circular':
+            return `円形-φ${dims.D}`;
+        default:
+            // typeKeyがあるがswitchに該当しない場合、labelを使用
+            return member.sectionInfo.label || null;
+    }
+}
+
+/**
+ * ラベルグループ内の全要素のvisibleを設定
+ */
+function setGroupVisibility(group, visible) {
+    if (!group) return;
+    group.visible = visible;
+    group.children.forEach(child => {
+        child.visible = visible;
+    });
+}
+
+/**
+ * ラベル表示制御のセットアップ
+ */
+function setupLabelControls() {
+    const showNodeLabels = document.getElementById('show-node-labels');
+    const showMemberLabels = document.getElementById('show-member-labels');
+    const showSectionLabels = document.getElementById('show-section-labels');
+
+    if (showNodeLabels) {
+        showNodeLabels.addEventListener('change', (e) => {
+            labelVisibility.nodes = e.target.checked;
+            setGroupVisibility(nodeLabelsGroup, e.target.checked);
+        });
+    }
+
+    if (showMemberLabels) {
+        showMemberLabels.addEventListener('change', (e) => {
+            labelVisibility.members = e.target.checked;
+            setGroupVisibility(memberLabelsGroup, e.target.checked);
+        });
+    }
+
+    if (showSectionLabels) {
+        showSectionLabels.addEventListener('change', (e) => {
+            labelVisibility.sections = e.target.checked;
+            setGroupVisibility(sectionLabelsGroup, e.target.checked);
+        });
+    }
+}
+
+// アプリケーションを開始
+init();

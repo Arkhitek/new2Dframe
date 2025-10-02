@@ -5406,11 +5406,14 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // 複数選択された要素を強調表示
         highlightSelectedElements();
-        
+
         // 不安定要素をハイライト表示
         highlightInstabilityElements(ctx, transform);
-        
+
         drawSelectionRectangle(ctx);
+
+        // 3Dビューアにモデルデータを送信
+        sendModelToViewer();
     };
     const drawDisplacementDiagram = (nodes, members, D_global, memberLoads, manualScale = null) => {
         const drawingCtx = getDrawingContext(elements.displacementCanvas);
@@ -9105,11 +9108,24 @@ const buildPresetSectionInfo = ({ typeKey, typeLabel, designation, dims }) => {
 
     const dimensionSummary = dimensionEntries.map(d => `${d.label}=${d.value}`).join(', ');
 
+    // 板厚まで含んだ詳細な名称を生成
+    let detailedLabel = typeLabel;
+    if (designation) {
+        // 基本寸法（高さ×幅）に加えて板厚情報を追加
+        if (dims.t1 !== undefined && dims.t2 !== undefined) {
+            detailedLabel = `${typeLabel} ${designation}×${dims.t1}×${dims.t2}`;
+        } else if (dims.t !== undefined) {
+            detailedLabel = `${typeLabel} ${designation}×${dims.t}`;
+        } else {
+            detailedLabel = `${typeLabel} ${designation}`;
+        }
+    }
+
     const sectionInfo = {
         typeKey,
         typeLabel,
         designation,
-        label: designation ? `${typeLabel} ${designation}`.trim() : typeLabel,
+        label: detailedLabel.trim(),
         dimensions: dimensionEntries,
         dimensionSummary,
     svgMarkup: generateSectionSvgMarkup(typeKey, dims),
@@ -12201,658 +12217,61 @@ window.checkFrameGenerator = () => {
 };
 
 // ========================================
-// 簡易3Dビューア機能
+// 3Dビューア機能（独立ウィンドウ版）
 // ========================================
-document.addEventListener('DOMContentLoaded', () => {
-    // Three.jsのロード確認
-    if (typeof THREE === 'undefined') {
-        console.warn('Three.jsライブラリが読み込まれていません。3Dビューア機能は無効です。');
-        return;
-    }
 
-    const view3dBtn = document.getElementById('view-3d-btn');
-    const modal = document.getElementById('modal-3d-viewer');
+// 3Dビューアウィンドウの参照を保持
+let viewerWindow = null;
 
-    if (!view3dBtn || !modal) {
-        console.warn('3Dビューア要素が見つかりません');
-        return;
-    }
-
-    const closeBtn = modal.querySelector('.modal-3d-close');
-    const canvasContainer = document.getElementById('canvas-3d-container');
-
-    let scene, camera, renderer, controls, animationFrameId, labelRenderer;
-
-    // 3Dビューアを開く
-    const open3DViewer = () => {
+// 3Dビューアにモデルデータを送信する関数
+function sendModelToViewer() {
+    if (viewerWindow && !viewerWindow.closed) {
         try {
-            console.log('3Dビューアを開く処理開始');
-            const { nodes, members } = parseInputs();
-            console.log('parseInputsの結果:', { nodeCount: nodes.length, memberCount: members.length });
+            const modelData = parseInputs();
+            viewerWindow.postMessage({ type: 'updateModel', data: modelData }, '*');
+        } catch (error) {
+            console.error("3Dビューアへのモデル更新送信に失敗しました:", error);
+        }
+    } else {
+        viewerWindow = null;
+    }
+}
 
-            if (nodes.length === 0 || members.length === 0) {
-                alert('3D表示するモデルがありません。');
+document.addEventListener('DOMContentLoaded', () => {
+    const view3dBtn = document.getElementById('view-3d-btn');
+
+    if (view3dBtn) {
+        view3dBtn.addEventListener('click', () => {
+            // 既に開いている場合はフォーカスするだけ
+            if (viewerWindow && !viewerWindow.closed) {
+                viewerWindow.focus();
                 return;
             }
 
-            // 部材の断面情報を確認
-            const membersWithSection = members.filter(m => m.sectionInfo && m.sectionInfo.rawDims);
-            console.log('断面情報を持つ部材数:', membersWithSection.length);
-            console.log('部材サンプル:', members[0]);
-
-            modal.classList.remove('hidden');
-            modal.style.display = 'flex';
-            console.log('モーダルを表示');
-
-            init3DScene(nodes, members);
-        } catch (error) {
-            console.error('3Dビューアの初期化に失敗しました:', error);
-            alert('3Dビューアの表示に失敗しました: ' + error.message);
-        }
-    };
-
-    // 3Dビューアを閉じる
-    const close3DViewer = () => {
-        modal.classList.add('hidden');
-        modal.style.display = 'none';
-
-        // アニメーションループを停止し、リソースを解放
-        if (animationFrameId) {
-            cancelAnimationFrame(animationFrameId);
-        }
-        if (renderer) {
-            renderer.dispose();
-            renderer.forceContextLoss();
-            const gl = renderer.domElement.getContext('webgl');
-            if (gl && gl.getExtension('WEBGL_lose_context')) {
-                gl.getExtension('WEBGL_lose_context').loseContext();
-            }
-            if (canvasContainer.contains(renderer.domElement)) {
-                 canvasContainer.removeChild(renderer.domElement);
-            }
-            renderer = null;
-        }
-        if (labelRenderer) {
-            if (canvasContainer.contains(labelRenderer.domElement)) {
-                canvasContainer.removeChild(labelRenderer.domElement);
-            }
-            labelRenderer = null;
-        }
-        scene = null;
-        camera = null;
-        controls = null;
-    };
-
-    // 3Dシーンの初期化とモデル構築
-    const init3DScene = (nodes, members) => {
-        console.log('init3DScene開始');
-
-        // シーン
-        scene = new THREE.Scene();
-        scene.background = new THREE.Color(0xf0f0f0);
-        console.log('シーン作成完了');
-
-        // カメラ
-        const aspect = canvasContainer.clientWidth / canvasContainer.clientHeight;
-        console.log('コンテナサイズ:', { width: canvasContainer.clientWidth, height: canvasContainer.clientHeight, aspect });
-        camera = new THREE.PerspectiveCamera(75, aspect, 0.1, 1000);
-        camera.position.set(0, 0, 30); // 初期位置
-        console.log('カメラ作成完了');
-
-        // レンダラー（既存のcanvasをクリア）
-        canvasContainer.innerHTML = '';
-        renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(canvasContainer.clientWidth, canvasContainer.clientHeight);
-        renderer.setPixelRatio(window.devicePixelRatio);
-        canvasContainer.appendChild(renderer.domElement);
-        console.log('レンダラー作成完了');
-
-        // CSS2DRenderer（ラベル用）
-        labelRenderer = new THREE.CSS2DRenderer();
-        labelRenderer.setSize(canvasContainer.clientWidth, canvasContainer.clientHeight);
-        labelRenderer.domElement.style.position = 'absolute';
-        labelRenderer.domElement.style.top = '0';
-        labelRenderer.domElement.style.pointerEvents = 'none';
-        canvasContainer.appendChild(labelRenderer.domElement);
-        console.log('CSS2DRenderer作成完了');
-
-        // コントロール
-        controls = new THREE.OrbitControls(camera, renderer.domElement);
-        controls.enableDamping = true;
-        console.log('コントロール作成完了');
-
-        // ライト
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-        scene.add(ambientLight);
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-        directionalLight.position.set(50, 50, 50);
-        scene.add(directionalLight);
-
-        // モデルの構築
-        build3DModel(scene, nodes, members);
-
-        // アニメーション開始
-        animate3D();
-    };
-
-    // 3Dモデルを構築
-    const build3DModel = (scene, nodes, members) => {
-        console.log('build3DModel開始', { nodeCount: nodes.length, memberCount: members.length });
-        const memberGroup = new THREE.Group();
-        const nodeMaterial = new THREE.MeshLambertMaterial({ color: 0x1565C0 });
-        const nodeGeometry = new THREE.BoxGeometry(0.4, 0.4, 0.4); // 正立方体に変更
-
-        // 節点を描画
-        nodes.forEach((node, i) => {
-            const nodeMesh = new THREE.Mesh(nodeGeometry, nodeMaterial);
-            nodeMesh.position.set(node.x, node.y, 0);
-            memberGroup.add(nodeMesh);
-            
-            // 節点番号ラベルを追加
-            const nodeDiv = document.createElement('div');
-            nodeDiv.className = 'label';
-            nodeDiv.textContent = `N${i + 1}`;
-            nodeDiv.style.color = '#1565C0';
-            nodeDiv.style.fontSize = '14px';
-            nodeDiv.style.fontWeight = 'bold';
-            nodeDiv.style.backgroundColor = 'rgba(255, 255, 255, 0.8)';
-            nodeDiv.style.padding = '2px 4px';
-            nodeDiv.style.borderRadius = '3px';
-            const nodeLabel = new THREE.CSS2DObject(nodeDiv);
-            nodeLabel.position.set(node.x, node.y, 0.5); // 節点の少し上に表示
-            memberGroup.add(nodeLabel);
-        });
-        console.log('節点描画完了:', nodes.length);
-
-        // 部材を描画
-        let successCount = 0;
-        members.forEach((member, index) => {
             try {
-                const memberMesh = createMemberMesh(member, nodes);
-                if (memberMesh) {
-                    memberGroup.add(memberMesh);
-                    successCount++;
-                    
-                    // 部材番号ラベルを部材の中央に追加
-                    const p1 = nodes[member.i];
-                    const p2 = nodes[member.j];
-                    const centerX = (p1.x + p2.x) / 2;
-                    const centerY = (p1.y + p2.y) / 2;
-                    
-                    const memberDiv = document.createElement('div');
-                    memberDiv.className = 'label';
-                    memberDiv.textContent = `M${index + 1}`;
-                    memberDiv.style.color = '#FF6B00';
-                    memberDiv.style.fontSize = '12px';
-                    memberDiv.style.fontWeight = 'bold';
-                    memberDiv.style.backgroundColor = 'rgba(255, 255, 255, 0.8)';
-                    memberDiv.style.padding = '2px 4px';
-                    memberDiv.style.borderRadius = '3px';
-                    const memberLabel = new THREE.CSS2DObject(memberDiv);
-                    memberLabel.position.set(centerX, centerY, 0);
-                    memberGroup.add(memberLabel);
+                const { nodes } = parseInputs();
+                if (nodes.length === 0) {
+                    alert('3D表示するモデルがありません。');
+                    return;
                 }
-            } catch(e) {
-                console.warn(`部材 ${member.i+1}-${member.j+1} の3Dメッシュ作成に失敗しました:`, e);
+
+                // 新しいウィンドウで3Dビューアを開く
+                viewerWindow = window.open('viewer_3d.html', 'Statica3DViewer', 'width=800,height=600,resizable=yes,scrollbars=yes');
+
+                if (!viewerWindow) {
+                    alert('ポップアップがブロックされた可能性があります。3Dビューアを開けませんでした。');
+                    return;
+                }
+
+                // 1秒後に最初のモデルデータを送信
+                setTimeout(() => {
+                    sendModelToViewer();
+                }, 1000);
+
+            } catch (error) {
+                console.error('3Dビューアの起動に失敗しました:', error);
+                alert('3Dビューアの起動に失敗しました: ' + error.message);
             }
         });
-        console.log(`部材描画完了: ${successCount}/${members.length}`);
-
-        scene.add(memberGroup);
-        console.log('メンバーグループをシーンに追加');
-
-        // モデル全体が収まるようにカメラを調整
-        const box = new THREE.Box3().setFromObject(memberGroup);
-        console.log('バウンディングボックス:', box);
-        const center = box.getCenter(new THREE.Vector3());
-        const size = box.getSize(new THREE.Vector3());
-        console.log('モデル中心:', center, 'サイズ:', size);
-        const maxDim = Math.max(size.x, size.y, size.z);
-        console.log('最大次元:', maxDim);
-
-        if (!isFinite(maxDim) || maxDim === 0) {
-            console.warn('モデルのサイズが不正です。デフォルトカメラ位置を使用します。');
-            camera.position.set(0, 0, 50);
-            controls.target.set(0, 0, 0);
-        } else {
-            const fov = camera.fov * (Math.PI / 180);
-            let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
-            cameraZ *= 1.5; // 少し余裕を持たせる
-            console.log('計算されたカメラZ距離:', cameraZ);
-
-            camera.position.set(center.x, center.y, center.z + cameraZ);
-            controls.target.copy(center);
-        }
-        controls.update();
-        console.log('カメラ最終位置:', camera.position, 'ターゲット:', controls.target);
-    };
-
-    // 部材の3Dメッシュを作成
-    const createMemberMesh = (member, nodes) => {
-        // 節点座標を取得
-        const nodeI = nodes[member.i];
-        const nodeJ = nodes[member.j];
-
-        if (!nodeI || !nodeJ) {
-            console.warn('部材の節点が見つかりません。', member);
-            return null;
-        }
-
-        const p1 = new THREE.Vector3(nodeI.x, nodeI.y, 0);
-        const p2 = new THREE.Vector3(nodeJ.x, nodeJ.y, 0);
-
-        // 部材の長さを計算（メートル単位）
-        const memberLength = p1.distanceTo(p2);
-        if (memberLength <= 0) {
-            console.warn('部材の長さが0です。', member);
-            return null;
-        }
-
-        // 断面情報がない場合、I, Z, Aから推定した簡易断面を作成
-        if (!member.sectionInfo || !member.sectionInfo.rawDims) {
-            const I = member.I || 1000; // cm4
-            const Z = member.Z || 1000; // cm3
-            const A = member.A || 100; // cm2
-
-            // Z = I / (H/2) より H = 2I/Z
-            // より大きく目立つように、計算値の20倍にスケーリング
-            const h = (2 * I / Z) * 10 * 20; // cm → mm (20倍スケール)
-            const b = ((A * 100 / h) || h / 2) * 20; // mm (20倍スケール)
-
-            member.sectionInfo = {
-                rawDims: { H: h, B: b, t1: b/6, t2: h/6 }, // 肉厚も太めに
-                typeKey: 'estimated',
-                label: '推定断面'
-            };
-        }
-
-        // 断面形状を作成（メートル単位に変換）
-        const shape = createSectionShape(member.sectionInfo, member);
-        if (!shape) return null; // 形状が作れなければスキップ
-
-        // 押し出し設定：部材長さ（すでにメートル単位）
-        const extrudeSettings = {
-            steps: 1,
-            depth: memberLength,
-            bevelEnabled: false,
-        };
-
-        const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-        
-        // 推定断面（断面が選択されていない部材）はオレンジ色、それ以外はグレー
-        const isEstimated = member.sectionInfo && member.sectionInfo.typeKey === 'estimated';
-        const materialColor = isEstimated ? 0xFF8C00 : 0x607D8B; // オレンジ : グレー
-        const material = new THREE.MeshLambertMaterial({ color: materialColor, wireframe: false });
-        const mesh = new THREE.Mesh(geometry, material);
-        
-        // 部材方向ベクトル
-        const direction = new THREE.Vector3().subVectors(p2, p1).normalize();
-        // 部材の種類を判定
-        const isVertical = Math.abs(direction.y) > 0.95; // 垂直部材（柱）の判定閾値を少し厳しく
-
-        // メッシュを始点に配置
-        mesh.position.copy(p1);
-
-        // ★★★ 修正箇所 ★★★
-        // 部材の向きに応じて「上方向」を切り替える
-        if (isVertical) {
-            // 垂直部材（柱）の場合、断面が正面を向くようにX軸を仮の「上」とする
-            mesh.up.set(1, 0, 0);
-        } else {
-            // 水平・斜め部材（梁）の場合、断面が天を向くようにY軸を「上」とする
-            mesh.up.set(0, 1, 0);
-        }
-        // ★★★ ここまで ★★★
-
-        // 終点(p2)の方向を向くようにメッシュを回転させる
-        mesh.lookAt(p2);
-        
-        // 強軸・弱軸の向きを反映
-        // lookAtで基本の向きが決まった後、ユーザーの指定に応じて90度回転させる
-        if (isVertical) {
-            // 垂直部材（柱）: 弱軸指定時に90度回転させる
-            if (member.sectionAxis && member.sectionAxis.key === 'y') {
-                mesh.rotateZ(Math.PI / 2);
-            }
-        } else {
-            // 水平部材・斜め部材: 弱軸指定時に90度回転させる
-            if (member.sectionAxis && member.sectionAxis.key === 'y') {
-                mesh.rotateZ(Math.PI / 2);
-            }
-        }
-
-        // ピン接合部にヒンジマーカー（赤い外形、白い中央の円筒）を追加
-        const hingeGroup = new THREE.Group();
-        const redMaterial = new THREE.MeshLambertMaterial({ color: 0xFF0000, side: THREE.DoubleSide }); // 赤色
-        const whiteMaterial = new THREE.MeshLambertMaterial({ color: 0xFFFFFF, side: THREE.DoubleSide }); // 白色
-
-        // 赤い外形と白い中央の円筒ジオメトリを作成する関数
-        const createRedWhiteCylinderGeometry = () => {
-            const outerRadius = 0.15; // 外側の半径
-            const innerRadius = 0.1; // 内側の半径
-            const height = 0.05; // 高さ（薄く）
-            const radialSegments = 32; // 円周方向の分割数
-            
-            return {
-                outer: new THREE.CylinderGeometry(outerRadius, outerRadius, height, radialSegments),
-                inner: new THREE.CylinderGeometry(innerRadius, innerRadius, height * 1.01, radialSegments) // 少し高くしてZファイティングを防ぐ
-            };
-        };
-
-        // 部材の方向ベクトル
-        const memberDirection = new THREE.Vector3().subVectors(p2, p1).normalize();
-        const offset = 0.5; // 節点から内側へのオフセット距離（メートル）
-
-        // デバッグログ
-        console.log(`部材 ${member.i+1}-${member.j+1}: i_conn=${member.i_conn}, j_conn=${member.j_conn}`);
-
-        // 始端がピン接合の場合（節点マーカーに接する位置に配置）
-        if (member.i_conn === 'pinned') {
-            const geometries = createRedWhiteCylinderGeometry();
-            
-            // 赤い外形
-            const hingeOuterI = new THREE.Mesh(geometries.outer, redMaterial);
-            // 白い中央
-            const hingeInnerI = new THREE.Mesh(geometries.inner, whiteMaterial);
-            
-            // 部材軸方向にオフセット
-            const offsetDist = 0.35;
-            const offsetPosition = new THREE.Vector3().copy(p1).addScaledVector(memberDirection, offsetDist);
-            
-            hingeOuterI.position.copy(offsetPosition);
-            hingeInnerI.position.copy(offsetPosition);
-            
-            // CylinderGeometryはデフォルトでY軸方向なので、Z軸方向（画面奥行）に回転
-            hingeOuterI.rotation.x = Math.PI / 2;
-            hingeInnerI.rotation.x = Math.PI / 2;
-            
-            hingeGroup.add(hingeOuterI);
-            hingeGroup.add(hingeInnerI);
-            console.log(`  → 始端にヒンジマーカー追加: ${offsetPosition.x}, ${offsetPosition.y}, ${offsetPosition.z}`);
-        }
-
-        // 終端がピン接合の場合（節点マーカーに接する位置に配置）
-        if (member.j_conn === 'pinned') {
-            const geometries = createRedWhiteCylinderGeometry();
-            
-            // 赤い外形
-            const hingeOuterJ = new THREE.Mesh(geometries.outer, redMaterial);
-            // 白い中央
-            const hingeInnerJ = new THREE.Mesh(geometries.inner, whiteMaterial);
-            
-            // 部材軸方向にオフセット（終端なので逆方向）
-            const offsetDist = 0.35;
-            const offsetPosition = new THREE.Vector3().copy(p2).addScaledVector(memberDirection, -offsetDist);
-            
-            hingeOuterJ.position.copy(offsetPosition);
-            hingeInnerJ.position.copy(offsetPosition);
-            
-            // CylinderGeometryはデフォルトでY軸方向なので、Z軸方向（画面奥行）に回転
-            hingeOuterJ.rotation.x = Math.PI / 2;
-            hingeInnerJ.rotation.x = Math.PI / 2;
-            
-            hingeGroup.add(hingeOuterJ);
-            hingeGroup.add(hingeInnerJ);
-            console.log(`  → 終端にヒンジマーカー追加: ${offsetPosition.x}, ${offsetPosition.y}, ${offsetPosition.z}`);
-        }
-
-        // 部材メッシュとヒンジをまとめたグループを返す
-        if (hingeGroup.children.length > 0) {
-            const combinedGroup = new THREE.Group();
-            combinedGroup.add(mesh);
-            combinedGroup.add(hingeGroup);
-            console.log(`  → グループ化して返す (ヒンジ数: ${hingeGroup.children.length})`);
-            return combinedGroup;
-        }
-
-        return mesh;
-    };
-    
-// 3Dモデルの断面形状からTHREE.Shapeを作成（メートル単位）
-const createSectionShape = (sectionInfo, member) => {
-    const dims = sectionInfo.rawDims;
-    const typeKey = sectionInfo.typeKey;
-
-    if (!dims || !typeKey) return null;
-
-    const shape = new THREE.Shape();
-
-    // 寸法をmmからmに変換する係数
-    const MM_TO_M = 0.001;
-
-    // H形鋼、I形鋼、軽量H形鋼など
-    switch (typeKey) {
-        case 'hkatakou_hiro':
-        case 'hkatakou_naka':
-        case 'hkatakou_hoso':
-        case 'ikatakou':
-        case 'keiryouhkatakou':
-        case 'keiryourippuhkatakou': {
-            const { H, B, t1, t2 } = dims;
-            if (!H || !B || !t1 || !t2) return null;
-
-            // 中心を原点とした形状作成（mm→m変換）
-            const halfH = (H * MM_TO_M) / 2;
-            const halfB = (B * MM_TO_M) / 2;
-            const halfT1 = (t1 * MM_TO_M) / 2;
-            const t2m = t2 * MM_TO_M;
-
-            // 外形（反時計回り）
-            shape.moveTo(-halfB, halfH);
-            shape.lineTo(halfB, halfH);
-            shape.lineTo(halfB, halfH - t2m);
-            shape.lineTo(halfT1, halfH - t2m);
-            shape.lineTo(halfT1, -halfH + t2m);
-            shape.lineTo(halfB, -halfH + t2m);
-            shape.lineTo(halfB, -halfH);
-            shape.lineTo(-halfB, -halfH);
-            shape.lineTo(-halfB, -halfH + t2m);
-            shape.lineTo(-halfT1, -halfH + t2m);
-            shape.lineTo(-halfT1, halfH - t2m);
-            shape.lineTo(-halfB, halfH - t2m);
-            shape.lineTo(-halfB, halfH);
-            break;
-        }
-        // 角形鋼管
-        case 'seihoukei':
-        case 'tyouhoukei': {
-            const A = dims.A, B = dims.B || A, t = dims.t;
-            if (!A || !B || !t) return null;
-
-            const halfA = (A * MM_TO_M) / 2;
-            const halfB = (B * MM_TO_M) / 2;
-            const tm = t * MM_TO_M;
-
-            shape.moveTo(-halfB, -halfA);
-            shape.lineTo(halfB, -halfA);
-            shape.lineTo(halfB, halfA);
-            shape.lineTo(-halfB, halfA);
-            shape.lineTo(-halfB, -halfA);
-
-            const hole = new THREE.Path();
-            hole.moveTo(-halfB + tm, -halfA + tm);
-            hole.lineTo(-halfB + tm, halfA - tm);
-            hole.lineTo(halfB - tm, halfA - tm);
-            hole.lineTo(halfB - tm, -halfA + tm);
-            hole.lineTo(-halfB + tm, -halfA + tm);
-            shape.holes.push(hole);
-            break;
-        }
-        // 円形鋼管
-        case 'koukan': {
-            const { D, t } = dims;
-            if (!D || !t) return null;
-
-            const Dm = D * MM_TO_M;
-            const tm = t * MM_TO_M;
-            const outerRadius = Dm / 2;
-            const innerRadius = outerRadius - tm;
-
-            shape.absarc(0, 0, outerRadius, 0, Math.PI * 2, false);
-
-            const hole = new THREE.Path();
-            hole.absarc(0, 0, innerRadius, 0, Math.PI * 2, true);
-            shape.holes.push(hole);
-            break;
-        }
-        // ▼▼▼ ここから修正・追加 ▼▼▼
-        // みぞ形鋼、軽みぞ形鋼
-        case 'mizogatakou':
-        case 'keimizogatakou': {
-            const { H, B, t1, t2, A, t } = dims;
-            const height = H * MM_TO_M;
-            const flangeWidth = (B || A) * MM_TO_M;
-            const webThick = (t1 || t) * MM_TO_M;
-            const flangeThick = (t2 || t) * MM_TO_M;
-
-            if(!height || !flangeWidth || !webThick || !flangeThick) return null;
-
-            const halfH = height / 2;
-            
-            // ウェブがY軸に来るように配置
-            shape.moveTo(0, halfH);
-            shape.lineTo(flangeWidth, halfH);
-            shape.lineTo(flangeWidth, halfH - flangeThick);
-            shape.lineTo(webThick, halfH - flangeThick);
-            shape.lineTo(webThick, -halfH + flangeThick);
-            shape.lineTo(flangeWidth, -halfH + flangeThick);
-            shape.lineTo(flangeWidth, -halfH);
-            shape.lineTo(0, -halfH);
-            shape.lineTo(0, halfH);
-            break;
-        }
-        // リップみぞ形鋼
-        case 'rippumizokatakou': {
-            const { H, A, C, t } = dims;
-            if (!H || !A || !C || !t) return null;
-
-            const height = H * MM_TO_M;
-            const flangeWidth = A * MM_TO_M;
-            const lip = C * MM_TO_M;
-            const thick = t * MM_TO_M;
-            const halfH = height / 2;
-
-            shape.moveTo(0, halfH); // Top-left of web
-            shape.lineTo(flangeWidth, halfH); // Top-right of flange
-            shape.lineTo(flangeWidth, halfH - thick); // Inner corner
-            shape.lineTo(flangeWidth - lip, halfH - thick); // Lip start
-            shape.lineTo(flangeWidth - lip, halfH - thick - lip); // Lip end (This part is simplified)
-            shape.lineTo(thick, halfH - thick - lip); // This is an approximation
-            shape.lineTo(thick, -halfH + thick + lip); // Approximation
-            shape.lineTo(flangeWidth - lip, -halfH + thick + lip); // Lip start
-            shape.lineTo(flangeWidth - lip, -halfH + thick); // Lip end
-            shape.lineTo(flangeWidth, -halfH + thick); // Inner corner
-            shape.lineTo(flangeWidth, -halfH); // Bottom-right of flange
-            shape.lineTo(0, -halfH); // Bottom-left of web
-            shape.lineTo(0, halfH); // Close path
-            break;
-        }
-        // 山形鋼（等辺・不等辺）
-        case 'touhenyamakatakou':
-        case 'futouhenyamagata': {
-            const { A, B, t } = dims;
-            const a = (A || 0) * MM_TO_M;
-            const b = (B || A || 0) * MM_TO_M; // 不等辺(B) or 等辺(A)
-            const thick = (t || 0) * MM_TO_M;
-            if (!a || !b || !thick) return null;
-
-            shape.moveTo(0, a);
-            shape.lineTo(thick, a);
-            shape.lineTo(thick, thick);
-            shape.lineTo(b, thick);
-            shape.lineTo(b, 0);
-            shape.lineTo(0, 0);
-            shape.lineTo(0, a);
-            break;
-        }
-        // 矩形断面（中実）
-        case '矩形':
-        case 'rectangular': {
-            const { H, B } = dims;
-            if (!H || !B) return null;
-
-            const height = H * MM_TO_M;
-            const width = B * MM_TO_M;
-            const halfH = height / 2;
-            const halfB = width / 2;
-            
-            shape.moveTo(-halfB, -halfH);
-            shape.lineTo(halfB, -halfH);
-            shape.lineTo(halfB, halfH);
-            shape.lineTo(-halfB, halfH);
-            shape.lineTo(-halfB, -halfH);
-            break;
-        }
-        // 円形断面（中実）
-        case '円形':
-        case 'circular': {
-            const { D } = dims;
-            if (!D) return null;
-            
-            const radius = (D * MM_TO_M) / 2;
-            shape.absarc(0, 0, radius, 0, Math.PI * 2, false);
-            break;
-        }
-        // ▲▲▲ ここまで修正・追加 ▲▲▲
-        // その他の形状は簡易的な矩形で代替
-        case 'estimated':
-        default: {
-            // I, Z, Aから寸法を推定
-            const I = member.I || 1000; // cm4
-            const Z = member.Z || 100; // cm3
-            const A = member.A || 10; // cm2
-
-            // より大きく目立つように、計算値の20倍にスケーリング
-            const h = (2 * I / Z) * 10 * 20; // cm → mm (20倍スケール)
-            const b = ((A * 100 / h) || h / 2) * 20; // mm (20倍スケール)
-
-            const halfH = (h * MM_TO_M) / 2;
-            const halfB = (b * MM_TO_M) / 2;
-
-            shape.moveTo(-halfB, -halfH);
-            shape.lineTo(halfB, -halfH);
-            shape.lineTo(halfB, halfH);
-            shape.lineTo(-halfB, halfH);
-            shape.lineTo(-halfB, -halfH);
-            break;
-        }
     }
-    return shape;
-};
-
-    // アニメーションループ
-    const animate3D = () => {
-        animationFrameId = requestAnimationFrame(animate3D);
-        controls.update();
-        renderer.render(scene, camera);
-        if (labelRenderer) {
-            labelRenderer.render(scene, camera);
-        }
-    };
-
-    // ウィンドウリサイズ対応
-    const onWindowResize = () => {
-        if (renderer && camera) {
-            camera.aspect = canvasContainer.clientWidth / canvasContainer.clientHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(canvasContainer.clientWidth, canvasContainer.clientHeight);
-            if (labelRenderer) {
-                labelRenderer.setSize(canvasContainer.clientWidth, canvasContainer.clientHeight);
-            }
-        }
-    };
-
-    // イベントリスナー設定
-    if (view3dBtn) {
-        view3dBtn.addEventListener('click', open3DViewer);
-    }
-    if (closeBtn) {
-        closeBtn.addEventListener('click', close3DViewer);
-    }
-    modal.addEventListener('click', (e) => {
-        if (e.target === modal) {
-            close3DViewer();
-        }
-    });
-    window.addEventListener('resize', onWindowResize);
 });
