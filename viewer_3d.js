@@ -258,8 +258,27 @@ function createMemberMesh(member, nodes) {
     const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
 
     const isEstimated = member.sectionInfo.typeKey === 'estimated';
-    const material = new THREE.MeshLambertMaterial({ color: isEstimated ? 0xFF8C00 : 0x607D8B });
+
+    // より見やすいマテリアル設定
+    const material = new THREE.MeshStandardMaterial({
+        color: isEstimated ? 0xFF8C00 : 0x8B9DC3,  // 推定断面:オレンジ / 通常:ライトブルー
+        metalness: 0.3,
+        roughness: 0.7,
+        flatShading: false
+    });
+
     const mesh = new THREE.Mesh(geometry, material);
+
+    // エッジラインを追加（断面形状を強調）
+    const edgesGeometry = new THREE.EdgesGeometry(geometry, 15); // 15度以上の角度のエッジのみ
+    const edgesMaterial = new THREE.LineBasicMaterial({
+        color: 0x000000,
+        linewidth: 1,
+        transparent: true,
+        opacity: 0.5
+    });
+    const edges = new THREE.LineSegments(edgesGeometry, edgesMaterial);
+    mesh.add(edges);
 
     const direction = new THREE.Vector3().subVectors(p2, p1).normalize();
     const isVertical = Math.abs(direction.y) > 0.95;
