@@ -10092,6 +10092,7 @@ const loadPreset = (index) => {
     const shareLinkModalClose = document.getElementById('share-link-modal-close');
     const shareLinkTextarea = document.getElementById('share-link-textarea');
     const copyShareLinkBtn = document.getElementById('copy-share-link-btn');
+    let isShareLinkLoaded = false;
 
     // URLセーフなBase64エンコード関数
     function toBase64Url(u8) {
@@ -10156,6 +10157,8 @@ const loadPreset = (index) => {
                     restoreState(state);
                     runFullAnalysis();
                     console.log("モデルの読み込みが完了しました。");
+                    isShareLinkLoaded = true;
+                    window.isShareLinkLoaded = true;
                     
                     history.replaceState(null, document.title, window.location.pathname + window.location.search);
                 }
@@ -10407,14 +10410,24 @@ const loadPreset = (index) => {
     });
     
     // Initial Load
-    loadPreset(15);
-    elements.presetSelector.value = 15;
+    let initializedWithPreset = false;
+    if (!isShareLinkLoaded) {
+        loadPreset(15);
+        if (elements.presetSelector) {
+            elements.presetSelector.value = 15;
+        }
+        initializedWithPreset = true;
+    } else {
+        console.log('共有リンクからモデルを読み込んだため、初期プリセットをスキップします。');
+    }
     setCanvasMode('select');
     
     // 初期化時に自重表示を更新
-    setTimeout(() => {
-        updateSelfWeightDisplay();
-    }, 100); // プリセット読み込み後に実行
+    if (initializedWithPreset) {
+        setTimeout(() => {
+            updateSelfWeightDisplay();
+        }, 100); // プリセット読み込み後に実行
+    }
 
     function applySectionAxisDataset(row, axisInfo) {
         if (!row) return;
