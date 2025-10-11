@@ -1644,6 +1644,15 @@ document.addEventListener('DOMContentLoaded', () => {
     // マウス位置を追跡（視覚的フィードバック用）
     let currentMouseX = 0;
     let currentMouseY = 0;
+    
+    // 結果図のパン・ズーム状態を管理
+    let resultPanZoomStates = {
+        displacement: { scale: 1, offsetX: 0, offsetY: 0, isInitialized: false },
+        moment: { scale: 1, offsetX: 0, offsetY: 0, isInitialized: false },
+        axial: { scale: 1, offsetX: 0, offsetY: 0, isInitialized: false },
+        shear: { scale: 1, offsetX: 0, offsetY: 0, isInitialized: false },
+        ratio: { scale: 1, offsetX: 0, offsetY: 0, isInitialized: false }
+    };
 
     const dispScaleInput = document.getElementById('disp-scale-input');
     dispScaleInput.addEventListener('change', (e) => {
@@ -4458,6 +4467,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!canvas) return null;
         
         const isModelCanvas = canvas.id === 'model-canvas';
+        const isResultCanvas = ['displacement-canvas', 'moment-canvas', 'axial-canvas', 'shear-canvas', 'ratio-canvas'].includes(canvas.id);
         
         const minX = nodes.length > 0 ? Math.min(...nodes.map(n => n.x)) : 0;
         const maxX = nodes.length > 0 ? Math.max(...nodes.map(n => n.x)) : 0;
@@ -4516,8 +4526,22 @@ document.addEventListener('DOMContentLoaded', () => {
             if (isModelCanvas && panZoomState.isInitialized) {
                 // モデル図が初期化済みの場合、既存のパン・ズーム情報を使用
                 ({ scale, offsetX, offsetY } = panZoomState);
+            } else if (isResultCanvas) {
+                // 結果図の場合、対応するパン・ズーム状態を取得
+                const resultState = resultPanZoomStates[canvas.id.replace('-canvas', '')];
+                if (resultState.isInitialized) {
+                    // 結果図が初期化済みの場合、既存のパン・ズーム情報を使用
+                    ({ scale, offsetX, offsetY } = resultState);
             } else {
-                // 結果の図、またはモデル図の初回描画時/リサイズ時は、常に中央に配置
+                    // 結果図の初回描画時は、常に中央に配置
+                    offsetX = padding + (rect.width - 2 * padding - modelWidth * scale) / 2 - minX * scale;
+                    offsetY = padding + (rect.height - 2 * padding - modelHeight * scale) / 2 + maxY * scale;
+                    
+                    // 結果図の状態を保存
+                    Object.assign(resultState, { scale, offsetX, offsetY, isInitialized: true });
+                }
+            } else {
+                // モデル図の初回描画時/リサイズ時は、常に中央に配置
                 offsetX = padding + (rect.width - 2 * padding - modelWidth * scale) / 2 - minX * scale;
                 offsetY = padding + (rect.height - 2 * padding - modelHeight * scale) / 2 + maxY * scale;
 
@@ -5287,7 +5311,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const metrics = ctx.measureText(text);
                 const w = metrics.width;
                 const h = metrics.fontBoundingBoxAscent ?? 12;
-                const padding = 6;
+                const padding = 12; // パディングを増やして重複を避ける
                 const candidates = [
                     [w/2 + padding, -padding, 'left', 'bottom'],
                     [-w/2 - padding, -padding, 'right', 'bottom'],
@@ -5408,7 +5432,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const pos = transform(n.x, n.y);
                     const metrics = ctx.measureText(nodes.indexOf(n) + 1);
                     const textWidth = metrics.width;
-                    return { x1: pos.x - 8, y1: pos.y - 8 - 12, x2: pos.x + 8 + textWidth, y2: pos.y + 8 };
+                    return { x1: pos.x - 12, y1: pos.y - 12 - 16, x2: pos.x + 12 + textWidth, y2: pos.y + 12 }; // 障害物サイズを拡大
                 });
                 drawStructure(ctx, transform, nodes, members, '#333', true, true, true, drawingCtx);
                 drawConnections(ctx, transform, nodes, members);
@@ -5460,6 +5484,19 @@ document.addEventListener('DOMContentLoaded', () => {
         const drawingCtx = getDrawingContext(elements.displacementCanvas);
         if (!drawingCtx) return;
         const { ctx, transform, scale } = drawingCtx;
+        
+        // D_globalが未定義または空の場合は描画をスキップ
+        if (!D_global || !Array.isArray(D_global) || D_global.length === 0) {
+            console.warn('変位図: D_globalが未定義または空です');
+            return;
+        }
+        
+        console.log('変位図: 描画開始', { 
+            hasNodes: !!nodes, 
+            hasMembers: !!members, 
+            d_global_length: D_global.length,
+            displacement_state: resultPanZoomStates.displacement
+        });
         
         let dispScale = 0;
         if (D_global.length > 0) {
@@ -5542,12 +5579,143 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         const labelManager = LabelManager(), allObstacles = [];
         const rect = elements.displacementCanvas.getBoundingClientRect(), canvasBounds = { x1: 5, y1: 25, x2: rect.width - 5, y2: rect.height - 5 };
-        nodes.forEach((n,i) => { const dx=D_global[i*3][0], dy=D_global[i*3+1][0]; const p_def = transform(n.x+dx*dispScale, n.y+dy*dispScale); allObstacles.push({x1:p_def.x-8,y1:p_def.y-8,x2:p_def.x+8,y2:p_def.y+8}); const p_orig = transform(n.x,n.y); const metrics = ctx.measureText(`${i+1}`); allObstacles.push({x1:p_orig.x+8,y1:p_orig.y-8-12,x2:p_orig.x+8+metrics.width,y2:p_orig.y-8}); });
-        ctx.fillStyle='#00008b'; ctx.font="11px Arial";
+        nodes.forEach((n,i) => { const dx=D_global[i*3][0], dy=D_global[i*3+1][0]; const p_def = transform(n.x+dx*dispScale, n.y+dy*dispScale); allObstacles.push({x1:p_def.x-12,y1:p_def.y-12,x2:p_def.x+12,y2:p_def.y+12}); const p_orig = transform(n.x,n.y); const metrics = ctx.measureText(`${i+1}`); allObstacles.push({x1:p_orig.x+12,y1:p_orig.y-12-16,x2:p_orig.x+12+metrics.width,y2:p_orig.y+12}); });
+        ctx.fillStyle='#00008b'; ctx.font="bold 22px Arial"; // 11pxから22pxに変更（2倍）
         nodes.forEach((n, i) => { const dx_mm=D_global[i*3][0]*1000, dy_mm=D_global[i*3+1][0]*1000; if (Math.sqrt(dx_mm**2+dy_mm**2)>1e-3) { const dx=D_global[i*3][0], dy=D_global[i*3+1][0]; const p_def=transform(n.x+dx*dispScale,n.y+dy*dispScale); const labelText=`(${dx_mm.toFixed(2)}, ${dy_mm.toFixed(2)})mm`; labelManager.draw(ctx,labelText,p_def.x,p_def.y,allObstacles,canvasBounds); } });
-        ctx.fillStyle='#8b0000';
-        maxIntermediateLabels.forEach(lbl => { const p_def=transform(lbl.x,lbl.y); allObstacles.push({x1:p_def.x-8,y1:p_def.y-8,x2:p_def.x+8,y2:p_def.y+8}); labelManager.draw(ctx,lbl.label,p_def.x,p_def.y,allObstacles,canvasBounds); });
+        ctx.fillStyle='#8b0000'; ctx.font="bold 22px Arial"; // 2倍のサイズに変更
+        maxIntermediateLabels.forEach(lbl => { const p_def=transform(lbl.x,lbl.y); allObstacles.push({x1:p_def.x-12,y1:p_def.y-12,x2:p_def.x+12,y2:p_def.y+12}); labelManager.draw(ctx,lbl.label,p_def.x,p_def.y,allObstacles,canvasBounds); });
     };
+
+    // 曲げモーメント図専用のラベル描画関数
+    const drawNodeMomentLabel = (ctx, nodeIndex, text, nodeX, nodeY, nodeLabels, drawnLabels, memberIndex, memberEnd, memberDirection, memberLineStart, memberLineEnd) => {
+        const metrics = ctx.measureText(text);
+        const w = metrics.width;
+        const h = 24; // フォントサイズ
+        const padding = 8;
+        
+        // 節点のモーメント情報を管理（部材インデックスと端部情報を含む）
+        const momentKey = `${nodeIndex}_${memberIndex}_${memberEnd}`;
+        
+        // 部材ライン上での位置を計算
+        let labelX, labelY;
+        
+        if (memberLineStart && memberLineEnd) {
+            // 部材ライン上で節点から少し離れた位置に配置
+            const memberLength = Math.sqrt((memberLineEnd.x - memberLineStart.x) ** 2 + (memberLineEnd.y - memberLineStart.y) ** 2);
+            const offsetFromNode = 15; // 節点から15ピクセル離れた位置
+            
+            if (memberEnd === 'i') {
+                // 節点i側の場合、部材ライン上で節点から少し離れた位置
+                const ratio = Math.min(offsetFromNode / memberLength, 0.3); // 最大30%の位置まで
+                labelX = memberLineStart.x + (memberLineEnd.x - memberLineStart.x) * ratio;
+                labelY = memberLineStart.y + (memberLineEnd.y - memberLineStart.y) * ratio;
+            } else {
+                // 節点j側の場合、部材ライン上で節点から少し離れた位置
+                const ratio = Math.max(1 - offsetFromNode / memberLength, 0.7); // 最小70%の位置から
+                labelX = memberLineStart.x + (memberLineEnd.x - memberLineStart.x) * ratio;
+                labelY = memberLineStart.y + (memberLineEnd.y - memberLineStart.y) * ratio;
+            }
+        } else {
+            // フォールバック: 節点位置を使用
+            labelX = nodeX;
+            labelY = nodeY - h - padding;
+        }
+        
+        // テキストを描画（四角囲いなし）
+        ctx.fillStyle = '#333';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text, labelX, labelY);
+        
+        // 描画済みラベルとして登録（重複チェック用）
+        const rect = { x1: labelX - w/2, y1: labelY - h/2, x2: labelX + w/2, y2: labelY + h/2 };
+        const paddedRect = { x1: rect.x1 - padding, y1: rect.y1 - padding, x2: rect.x2 + padding, y2: rect.y2 + padding };
+        drawnLabels.push(paddedRect);
+        
+        nodeLabels.set(momentKey, {
+            text: text,
+            position: { x: labelX, y: labelY },
+            nodePosition: { x: nodeX, y: nodeY }
+        });
+    };
+
+    const drawIntermediateMomentLabel = (ctx, text, x, y, drawnLabels, memberIndex, memberEnd) => {
+        const metrics = ctx.measureText(text);
+        const w = metrics.width;
+        const h = 24;
+        const padding = 8;
+        
+        const candidates = [
+            [0, -h - padding, 'center', 'bottom'],
+            [w/2 + padding, -padding, 'left', 'bottom'],
+            [-w/2 - padding, -padding, 'right', 'bottom'],
+            [0, h + padding, 'center', 'top'],
+            [w/2 + padding, h + padding, 'left', 'top'],
+            [-w/2 - padding, h + padding, 'right', 'top']
+        ];
+        
+        for (const cand of candidates) {
+            const labelX = x + cand[0];
+            const labelY = y + cand[1];
+            let rect;
+            if (cand[2] === 'left') rect = { x1: labelX, y1: labelY - h, x2: labelX + w, y2: labelY };
+            else if (cand[2] === 'right') rect = { x1: labelX - w, y1: labelY - h, x2: labelX, y2: labelY };
+            else rect = { x1: labelX - w/2, y1: labelY - h, x2: labelX + w/2, y2: labelY };
+            
+            const paddedRect = { x1: rect.x1 - padding, y1: rect.y1 - padding, x2: rect.x2 + padding, y2: rect.y2 + padding };
+            
+            // 重複チェック
+            let isOverlapping = false;
+            for (const existing of drawnLabels) {
+                if (!(paddedRect.x2 < existing.x1 || paddedRect.x1 > existing.x2 || paddedRect.y2 < existing.y1 || paddedRect.y1 > existing.y2)) {
+                    isOverlapping = true;
+                    break;
+                }
+            }
+            
+            if (!isOverlapping) {
+                // テキストのみ描画（四角囲いなし）
+                ctx.fillStyle = '#333';
+                ctx.textAlign = cand[2];
+                ctx.textBaseline = cand[3];
+                ctx.fillText(text, labelX, labelY);
+                
+                // 接続線を描画（モーメント描画部分からラベルへ）
+                ctx.strokeStyle = '#666';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(x, y);
+                ctx.lineTo(labelX, labelY);
+                ctx.stroke();
+                
+                // 描画済みラベルとして登録
+                drawnLabels.push(paddedRect);
+                return;
+            }
+        }
+        
+        // フォールバック: 強制描画
+        const labelX = x;
+        const labelY = y - h - padding;
+        const rect = { x1: labelX - w/2, y1: labelY - h, x2: labelX + w/2, y2: labelY };
+        const paddedRect = { x1: rect.x1 - padding, y1: rect.y1 - padding, x2: rect.x2 + padding, y2: rect.y2 + padding };
+        
+        ctx.fillStyle = '#333';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText(text, labelX, labelY);
+        
+        // 接続線を描画
+        ctx.strokeStyle = '#666';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(labelX, labelY);
+        ctx.stroke();
+        
+        drawnLabels.push(paddedRect);
+    };
+
     const drawMomentDiagram = (nodes, members, forces, memberLoads) => { 
         const drawingCtx = getDrawingContext(elements.momentCanvas); 
         if (!drawingCtx) return; 
@@ -5557,7 +5725,15 @@ document.addEventListener('DOMContentLoaded', () => {
         // 部材番号も表示する
         drawStructure(ctx, transform, nodes, members, '#ccc', false, true); 
         
-        const nodeObstacles = nodes.map(n => { const pos = transform(n.x, n.y); return {x1: pos.x - 12, y1: pos.y - 12, x2: pos.x + 12, y2: pos.y + 12}; }); 
+        // 曲げモーメント図専用のラベル管理システム
+        const nodeLabels = new Map(); // 節点ごとのラベル情報を管理
+        const drawnLabels = []; // 描画済みラベルの位置情報
+        
+        // 節点障害物の設定
+        const nodeObstacles = nodes.map(n => { 
+            const pos = transform(n.x, n.y); 
+            return {x1: pos.x - 20, y1: pos.y - 20, x2: pos.x + 20, y2: pos.y + 20}; 
+        }); 
         let maxMoment = 0; 
         forces.forEach((f, idx) => { 
             const member = members[idx]; 
@@ -5604,9 +5780,29 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.closePath(); 
             ctx.fill(); 
             ctx.stroke(); 
-            ctx.fillStyle = '#333'; 
-            if (Math.abs(force.M_i) > 1e-3) labelManager.draw(ctx, `${force.M_i.toFixed(2)}`, start.x, start.y, nodeObstacles); 
-            if (Math.abs(force.M_j) > 1e-3) labelManager.draw(ctx, `${force.M_j.toFixed(2)}`, end.x, end.y, nodeObstacles); 
+            ctx.fillStyle = '#333'; ctx.font = "bold 24px Arial"; // 2倍のサイズに変更
+            
+            // 節点モーメント値を表示（専用のラベル管理システムを使用）
+            if (Math.abs(force.M_i) > 1e-3) {
+                // 節点iでのモーメント描画位置を計算（オフセット適用）
+                const offset_i = -force.M_i * momentScale;
+                const momentPos_i = transform(n_i.x - offset_i * m.s, n_i.y + offset_i * m.c);
+                // 部材の方向情報とライン情報を渡す
+                const memberDirection = { c: m.c, s: m.s };
+                const memberLineStart = start; // 部材ラインの開始点
+                const memberLineEnd = end; // 部材ラインの終了点
+                drawNodeMomentLabel(ctx, m.i, `${force.M_i.toFixed(2)}`, momentPos_i.x, momentPos_i.y, nodeLabels, drawnLabels, idx, 'i', memberDirection, memberLineStart, memberLineEnd);
+            }
+            if (Math.abs(force.M_j) > 1e-3) {
+                // 節点jでのモーメント描画位置を計算（オフセット適用）
+                const offset_j = -force.M_j * momentScale;
+                const momentPos_j = transform(n_j.x - offset_j * m.s, n_j.y + offset_j * m.c);
+                // 部材の方向情報とライン情報を渡す
+                const memberDirection = { c: m.c, s: m.s };
+                const memberLineStart = start; // 部材ラインの開始点
+                const memberLineEnd = end; // 部材ラインの終了点
+                drawNodeMomentLabel(ctx, m.j, `${force.M_j.toFixed(2)}`, momentPos_j.x, momentPos_j.y, nodeLabels, drawnLabels, idx, 'j', memberDirection, memberLineStart, memberLineEnd);
+            } 
             if (w !== 0 && Math.abs(force.Q_i) > 1e-9) { 
                 const x_max = force.Q_i / w; 
                 if (x_max > 1e-6 && x_max < m.length - 1e-6) { 
@@ -5614,7 +5810,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     const M_max=M_linear+M_parabolic, offset=-M_max*momentScale; 
                     const globalX=n_i.x+x_max*m.c-offset*m.s, globalY=n_i.y+x_max*m.s+offset*m.c; 
                     const pt=transform(globalX,globalY); 
-                    labelManager.draw(ctx,`${M_max.toFixed(2)}`,pt.x,pt.y,nodeObstacles); 
+                    ctx.font = "bold 24px Arial"; // 2倍のサイズに変更
+                    drawIntermediateMomentLabel(ctx, `${M_max.toFixed(2)}`, pt.x, pt.y, drawnLabels, idx, 'max'); 
                 } 
             } 
         }); 
@@ -5628,7 +5825,12 @@ document.addEventListener('DOMContentLoaded', () => {
         // 部材番号も表示する
         drawStructure(ctx, transform, nodes, members, '#ccc', false, true); 
         
-        const nodeObstacles = nodes.map(n => { const pos = transform(n.x, n.y); return {x1: pos.x - 12, y1: pos.y - 12, x2: pos.x + 12, y2: pos.y + 12}; }); 
+        // より詳細な障害物管理
+        const nodeObstacles = nodes.map(n => { 
+            const pos = transform(n.x, n.y); 
+            return {x1: pos.x - 16, y1: pos.y - 16, x2: pos.x + 16, y2: pos.y + 16}; 
+        });
+        const allObstacles = [...nodeObstacles]; 
         let maxAxial = 0; 
         forces.forEach(f => maxAxial = Math.max(maxAxial, Math.abs(f.N_i), Math.abs(f.N_j))); 
         const maxOffsetPixels = 40; 
@@ -5653,11 +5855,21 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.strokeStyle = N > 0 ? 'red' : 'blue'; 
             ctx.fill(); 
             ctx.stroke(); 
-            ctx.fillStyle = '#333'; 
+            ctx.fillStyle = '#333'; ctx.font = "bold 24px Arial"; // 2倍のサイズに変更
             if (Math.abs(N) > 1e-3) { 
                 const mid_offset_x=p1_offset_x*0.5, mid_offset_y=p1_offset_y*0.5; 
                 const mid_pos=transform((n_i.x+n_j.x)/2+mid_offset_x, (n_i.y+n_j.y)/2+mid_offset_y); 
-                labelManager.draw(ctx,`${N.toFixed(2)}`,mid_pos.x,mid_pos.y,nodeObstacles); 
+                labelManager.draw(ctx,`${N.toFixed(2)}`,mid_pos.x,mid_pos.y,allObstacles);
+                // 描画したラベルの位置を障害物として追加
+                const labelMetrics = ctx.measureText(`${N.toFixed(2)}`);
+                const labelWidth = labelMetrics.width;
+                const labelHeight = 24;
+                allObstacles.push({
+                    x1: mid_pos.x - labelWidth/2 - 8, 
+                    y1: mid_pos.y - labelHeight - 8, 
+                    x2: mid_pos.x + labelWidth/2 + 8, 
+                    y2: mid_pos.y + 8
+                });
             } 
         }); 
     };
@@ -5670,7 +5882,12 @@ document.addEventListener('DOMContentLoaded', () => {
         // 部材番号も表示する
         drawStructure(ctx, transform, nodes, members, '#ccc', false, true); 
         
-        const nodeObstacles = nodes.map(n => { const pos = transform(n.x, n.y); return {x1: pos.x - 12, y1: pos.y - 12, x2: pos.x + 12, y2: pos.y + 12}; }); 
+        // より詳細な障害物管理
+        const nodeObstacles = nodes.map(n => { 
+            const pos = transform(n.x, n.y); 
+            return {x1: pos.x - 16, y1: pos.y - 16, x2: pos.x + 16, y2: pos.y + 16}; 
+        });
+        const allObstacles = [...nodeObstacles]; 
         let maxShear = 0; 
         forces.forEach(f => maxShear = Math.max(maxShear, Math.abs(f.Q_i), Math.abs(f.Q_j))); 
         const maxOffsetPixels = 50; 
@@ -5711,9 +5928,33 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.strokeStyle = Q_i > 0 ? 'green' : 'orange'; 
             ctx.fill(); 
             ctx.stroke(); 
-            ctx.fillStyle = '#333'; 
-            if(Math.abs(Q_i)>1e-3) labelManager.draw(ctx,`${Q_i.toFixed(2)}`,p1.x,p1.y,nodeObstacles); 
-            if(Math.abs(Q_j)>1e-3) labelManager.draw(ctx,`${Q_j.toFixed(2)}`,p2.x,p2.y,nodeObstacles); 
+            ctx.fillStyle = '#333'; ctx.font = "bold 24px Arial"; // 2倍のサイズに変更
+            if(Math.abs(Q_i)>1e-3) {
+                labelManager.draw(ctx,`${Q_i.toFixed(2)}`,p1.x,p1.y,allObstacles);
+                // 描画したラベルの位置を障害物として追加
+                const labelMetrics = ctx.measureText(`${Q_i.toFixed(2)}`);
+                const labelWidth = labelMetrics.width;
+                const labelHeight = 24;
+                allObstacles.push({
+                    x1: p1.x - labelWidth/2 - 8, 
+                    y1: p1.y - labelHeight - 8, 
+                    x2: p1.x + labelWidth/2 + 8, 
+                    y2: p1.y + 8
+                });
+            }
+            if(Math.abs(Q_j)>1e-3) {
+                labelManager.draw(ctx,`${Q_j.toFixed(2)}`,p2.x,p2.y,allObstacles);
+                // 描画したラベルの位置を障害物として追加
+                const labelMetrics = ctx.measureText(`${Q_j.toFixed(2)}`);
+                const labelWidth = labelMetrics.width;
+                const labelHeight = 24;
+                allObstacles.push({
+                    x1: p2.x - labelWidth/2 - 8, 
+                    y1: p2.y - labelHeight - 8, 
+                    x2: p2.x + labelWidth/2 + 8, 
+                    y2: p2.y + 8
+                });
+            } 
         }); 
     };
 
@@ -6511,21 +6752,47 @@ document.addEventListener('DOMContentLoaded', () => {
             const originalFont = ctx.font;
             ctx.font = 'bold 28px Arial'; // 元の14pxから28pxに変更
             ctx.fillStyle = res.maxRatio > 1.0 ? 'red' : '#333';
-            const labelOffsetX = 20;
-            const labelOffsetY = -15;
-            const labelX = maxRatioPos.x + labelOffsetX;
-            const labelY = maxRatioPos.y + labelOffsetY;
             
-            // 赤丸印と数値の間を線で結ぶ
+            const text = res.maxRatio.toFixed(2);
+            const metrics = ctx.measureText(text);
+            const w = metrics.width;
+            const h = metrics.fontBoundingBoxAscent ?? 12;
+            const padding = 6;
+            
+            // 線の終点を決定（赤丸印から適度な距離の位置）
+            const lineLength = 35; // 線の長さを固定
+            const lineEndX = maxRatioPos.x + lineLength;
+            const lineEndY = maxRatioPos.y - lineLength * 0.4; // 少し上向き
+            
+            // 赤丸印から線の終点まで線を描画
             ctx.beginPath();
             ctx.moveTo(maxRatioPos.x, maxRatioPos.y);
-            ctx.lineTo(labelX, labelY);
+            ctx.lineTo(lineEndX, lineEndY);
             ctx.strokeStyle = res.maxRatio > 1.0 ? 'red' : '#333';
             ctx.lineWidth = 2;
             ctx.stroke();
             
+            // 線の終点に数値を直接描画（LabelManagerを使わずに直接描画）
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'bottom';
+            ctx.fillStyle = res.maxRatio > 1.0 ? 'red' : '#333';
+            
+            // 背景を白で塗りつぶして読みやすくする
+            const bgPadding = 4;
+            const bgX = lineEndX - bgPadding;
+            const bgY = lineEndY - h - bgPadding;
+            const bgWidth = w + bgPadding * 2;
+            const bgHeight = h + bgPadding * 2;
+            
+            ctx.fillStyle = 'white';
+            ctx.fillRect(bgX, bgY, bgWidth, bgHeight);
+            ctx.strokeStyle = res.maxRatio > 1.0 ? 'red' : '#333';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(bgX, bgY, bgWidth, bgHeight);
+            
             // 数値を描画
-            labelManager.draw(ctx, res.maxRatio.toFixed(2), labelX, labelY, nodeObstacles);
+            ctx.fillStyle = res.maxRatio > 1.0 ? 'red' : '#333';
+            ctx.fillText(text, lineEndX, lineEndY);
             
             // フォントを元に戻す
             ctx.font = originalFont;
@@ -6636,6 +6903,140 @@ document.addEventListener('DOMContentLoaded', () => {
         panZoomState.offsetX = centerX - modelX * newScale;
         panZoomState.offsetY = centerY + modelY * newScale;
         drawOnCanvas();
+    };
+
+    // 結果図用のズーム関数
+    const zoomResultCanvas = (canvasId, factor, centerX, centerY) => {
+        const canvas = document.getElementById(canvasId);
+        if (!canvas) return;
+        
+        const state = resultPanZoomStates[canvasId.replace('-canvas', '')];
+        if (!state.isInitialized) return;
+        
+        const { scale, offsetX, offsetY } = state;
+        const modelX = (centerX - offsetX) / scale;
+        const modelY = (offsetY - centerY) / scale;
+        const newScale = scale * factor;
+        
+        state.scale = newScale;
+        state.offsetX = centerX - modelX * newScale;
+        state.offsetY = centerY + modelY * newScale;
+        
+        // 該当する結果図を再描画
+        if (canvasId === 'displacement-canvas') {
+            if (lastResults && lastResults.D && lastResults.D.length > 0) {
+                console.log('変位図: ズーム操作で再描画', { hasLastResults: !!lastResults, hasD: !!lastResults.D, d_length: lastResults.D.length });
+                drawDisplacementDiagram(lastResults.nodes, lastResults.members, lastResults.D, lastResults.memberLoads);
+            } else {
+                console.log('変位図: データ不足で再描画スキップ', { hasLastResults: !!lastResults, hasD: lastResults ? !!lastResults.D : false });
+            }
+        } else if (canvasId === 'moment-canvas' && lastResults && lastResults.forces) {
+            drawMomentDiagram(lastResults.nodes, lastResults.members, lastResults.forces, lastResults.memberLoads);
+        } else if (canvasId === 'axial-canvas' && lastResults && lastResults.forces) {
+            drawAxialForceDiagram(lastResults.nodes, lastResults.members, lastResults.forces);
+        } else if (canvasId === 'shear-canvas' && lastResults && lastResults.forces) {
+            drawShearForceDiagram(lastResults.nodes, lastResults.members, lastResults.forces, lastResults.memberLoads);
+        } else if (canvasId === 'ratio-canvas') {
+            drawRatioDiagram();
+        }
+    };
+
+    // 結果図用のパン関数
+    const panResultCanvas = (canvasId, deltaX, deltaY) => {
+        const state = resultPanZoomStates[canvasId.replace('-canvas', '')];
+        if (!state.isInitialized) return;
+        
+        state.offsetX += deltaX;
+        state.offsetY += deltaY;
+        
+        const canvas = document.getElementById(canvasId);
+        if (!canvas) return;
+        
+        // 該当する結果図を再描画
+        if (canvasId === 'displacement-canvas') {
+            if (lastResults && lastResults.D && lastResults.D.length > 0) {
+                console.log('変位図: パン操作で再描画', { hasLastResults: !!lastResults, hasD: !!lastResults.D, d_length: lastResults.D.length });
+                drawDisplacementDiagram(lastResults.nodes, lastResults.members, lastResults.D, lastResults.memberLoads);
+            } else {
+                console.log('変位図: データ不足で再描画スキップ', { hasLastResults: !!lastResults, hasD: lastResults ? !!lastResults.D : false });
+            }
+        } else if (canvasId === 'moment-canvas' && lastResults && lastResults.forces) {
+            drawMomentDiagram(lastResults.nodes, lastResults.members, lastResults.forces, lastResults.memberLoads);
+        } else if (canvasId === 'axial-canvas' && lastResults && lastResults.forces) {
+            drawAxialForceDiagram(lastResults.nodes, lastResults.members, lastResults.forces);
+        } else if (canvasId === 'shear-canvas' && lastResults && lastResults.forces) {
+            drawShearForceDiagram(lastResults.nodes, lastResults.members, lastResults.forces, lastResults.memberLoads);
+        } else if (canvasId === 'ratio-canvas') {
+            drawRatioDiagram();
+        }
+    };
+
+    // 結果図のキャンバスにマウス操作機能を追加
+    const addResultCanvasMouseControls = (canvasId) => {
+        const canvas = document.getElementById(canvasId);
+        if (!canvas) {
+            console.error(`キャンバスが見つかりません: ${canvasId}`);
+            return;
+        }
+
+        console.log(`マウス操作機能を追加: ${canvasId}`, { canvas: canvas });
+
+        let isDragging = false;
+        let lastMouseX = 0;
+        let lastMouseY = 0;
+
+        // マウスダウンイベント
+        canvas.addEventListener('mousedown', (e) => {
+            if (e.button === 0) { // 左クリック
+                console.log(`マウスダウン: ${canvasId}`, { 
+                    hasLastResults: !!lastResults, 
+                    hasD: lastResults ? !!lastResults.D : false,
+                    d_length: lastResults && lastResults.D ? lastResults.D.length : 0
+                });
+                isDragging = true;
+                lastMouseX = e.clientX;
+                lastMouseY = e.clientY;
+                canvas.style.cursor = 'grabbing';
+            }
+        });
+
+        // マウス移動イベント
+        canvas.addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                const deltaX = e.clientX - lastMouseX;
+                const deltaY = e.clientY - lastMouseY;
+                panResultCanvas(canvasId, deltaX, deltaY);
+                lastMouseX = e.clientX;
+                lastMouseY = e.clientY;
+            }
+        });
+
+        // マウスアップイベント
+        canvas.addEventListener('mouseup', (e) => {
+            if (e.button === 0) {
+                isDragging = false;
+                canvas.style.cursor = 'grab';
+            }
+        });
+
+        // マウスリーブイベント
+        canvas.addEventListener('mouseleave', () => {
+            isDragging = false;
+            canvas.style.cursor = 'grab';
+        });
+
+        // ホイールイベント（ズーム）
+        canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const rect = canvas.getBoundingClientRect();
+            const centerX = e.clientX - rect.left;
+            const centerY = e.clientY - rect.top;
+            const zoomFactor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+            zoomResultCanvas(canvasId, zoomFactor, centerX, centerY);
+        }, { passive: false });
+
+        // カーソルスタイルを設定
+        canvas.style.cursor = 'grab';
     };
 
     const animateDisplacement = (nodes, members, D_global, memberLoads) => {
@@ -7375,12 +7776,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 let snappedY = modelCoords.y;
                 
                 if (elements.gridToggle.checked) {
-                    snappedX = Math.round(modelCoords.x / spacing) * spacing;
-                    snappedY = Math.round(modelCoords.y / spacing) * spacing;
-                    const dist = Math.sqrt((modelCoords.x - snappedX) ** 2 + (modelCoords.y - snappedY) ** 2);
+                    const gridX = Math.round(modelCoords.x / spacing) * spacing;
+                    const gridY = Math.round(modelCoords.y / spacing) * spacing;
+                    const dist = Math.sqrt((modelCoords.x - gridX) ** 2 + (modelCoords.y - gridY) ** 2);
                     if (dist < snapTolerance) {
+                        // グリッドに近い場合はグリッド座標に配置
+                        snappedX = gridX;
+                        snappedY = gridY;
+                        console.log('🔍 グリッドスナップ適用:', { original: { x: modelCoords.x, y: modelCoords.y }, snapped: { x: snappedX, y: snappedY }, distance: dist });
+                    } else {
+                        // グリッドから遠い場合は元の座標を維持
                         snappedX = modelCoords.x;
                         snappedY = modelCoords.y;
+                        console.log('🔍 グリッドスナップ無し:', { original: { x: modelCoords.x, y: modelCoords.y }, distance: dist });
                     }
                 }
                 
@@ -8026,6 +8434,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if(elements.memberPropsPopup) makePopupDraggable(elements.memberPropsPopup);
     if(elements.addMemberPopup) makePopupDraggable(elements.addMemberPopup);
     if(elements.nodeLoadPopup) makePopupDraggable(elements.nodeLoadPopup);
+
+    // 結果図のキャンバスにマウス操作機能を追加
+    addResultCanvasMouseControls('displacement-canvas');
+    addResultCanvasMouseControls('moment-canvas');
+    addResultCanvasMouseControls('axial-canvas');
+    addResultCanvasMouseControls('shear-canvas');
+    addResultCanvasMouseControls('ratio-canvas');
 
     document.addEventListener('click', (e) => { 
         if (elements.modeAddMemberBtn && elements.modeAddMemberBtn.contains(e.target)) return;
@@ -9920,6 +10335,11 @@ const loadPreset = (index) => {
         // ★★★★★ 修正箇所 ★★★★★
         // 描画範囲の自動調整フラグをリセット
         panZoomState.isInitialized = false; 
+        
+        // 結果図のパン・ズーム状態もリセット
+        Object.keys(resultPanZoomStates).forEach(key => {
+            resultPanZoomStates[key].isInitialized = false;
+        }); 
         
         drawOnCanvas();
         runFullAnalysis();
