@@ -3,3 +3,4 @@ node_modules/
 
 # PCでのテストに使う秘密の鍵ファイル
 .env
+.env.development.local
