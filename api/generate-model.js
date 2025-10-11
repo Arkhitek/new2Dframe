@@ -1,100 +1,70 @@
 // 外部と通信するための道具をインポートします
 const fetch = require('node-fetch');
 
-/**
- * この関数が、ブラウザからのリクエストに応じてVercelのサーバー上で実行されます。
- * Netlifyの `exports.handler` の代わりに、`export default` を使います。
- * @param {object} req - リクエスト情報を持つオブジェクト
- * @param {object} res - レスポンスを返すためのオブジェクト
- */
+// Vercelのサーバーレス関数のエントリーポイント
 export default async function handler(req, res) {
-    // POST以外の方法で来たリクエストは追い返します
+    // POST以外のリクエストはエラーを返す
     if (req.method !== 'POST') {
         res.status(405).json({ error: 'Method Not Allowed' });
         return;
     }
 
     try {
-        // 利用者(ブラウザ)から届いたリクエストの中身を取り出します
-        // Vercelでは `req.body` に中身が入っています
+        // リクエストの中身を取り出します
         const { prompt: userPrompt } = req.body;
         if (!userPrompt) {
             res.status(400).json({ error: '指示内容が空です。' });
             return;
         }
 
-        // Vercelの金庫からHugging FaceのAPIキーを安全に取り出します
-        const API_KEY = process.env.HUGGINGFACE_API_KEY;
+        // Vercelの環境変数から「Gemini」のAPIキーを取得します
+        const API_KEY = process.env.GEMINI_API_KEY;
         if (!API_KEY) {
-            throw new Error("Hugging FaceのAPIキーがサーバーに設定されていません。Vercelの管理画面で設定してください。");
+            throw new Error("Gemini APIキーがサーバーに設定されていません。");
         }
         
-        const API_URL = "https://api-inference.huggingface.co/models/google/gemma-7b-it";
+        // ★★★ 変更点：APIのURLをGemini API（安定版）に変更 ★★★
+        const API_URL = `https://generativelanguage.googleapis.com/v1/models/gemini-1.0-pro:generateContent?key=${API_KEY}`;
         
-        // Hugging Face APIに送るための詳しい依頼方法を書いた定型文（システムプロンプト）
+        // Gemini APIに送るためのシステムプロンプト
         const systemPrompt = createSystemPromptForBackend();
 
-        // リクエストの形式をHugging Faceの仕様に合わせます
+        // ★★★ 変更点：リクエストの形式をGemini APIの仕様に変更 ★★★
         const requestBody = {
-            inputs: `${systemPrompt}\n\nユーザーの指示:\n${userPrompt}`,
-            parameters: {
-                return_full_text: false,
-                max_new_tokens: 2048,
-                temperature: 0.1,
-            }
+            contents: [{ 
+                parts: [{ 
+                    text: `${systemPrompt}\n\nユーザーの指示:\n${userPrompt}` 
+                }] 
+            }]
         };
 
-        // 仲介役がHugging Face APIへリクエストを送信します
-        const hfResponse = await fetch(API_URL, {
+        // 仲介役がGemini APIへリクエストを送信します
+        const geminiResponse = await fetch(API_URL, {
             method: 'POST',
             headers: { 
-                'Authorization': `Bearer ${API_KEY}`,
                 'Content-Type': 'application/json' 
             },
             body: JSON.stringify(requestBody),
         });
 
-        const data = await hfResponse.json();
+        const data = await geminiResponse.json();
 
-        // Hugging Face APIからエラーが返ってきた場合の処理
-        if (!hfResponse.ok) {
-            console.error('Hugging Face API Error:', data);
-            if (data.error && data.error.includes("is currently loading")) {
-                 throw new Error(`AIモデルが現在起動中です。約${data.estimated_time || 20}秒後にもう一度お試しください。`);
-            }
-            throw new Error(data.error || 'Hugging Face APIでエラーが発生しました。');
+        // Gemini APIからエラーが返ってきた場合の処理
+        if (!geminiResponse.ok) {
+            console.error('Gemini API Error:', data);
+            throw new Error(data.error?.message || 'Gemini APIでエラーが発生しました。');
         }
 
-        if (!data || !data[0] || !data[0].generated_text) {
-             throw new Error("Hugging Face APIから予期しない形式のレスポンスがありました。");
-        }
-        const generatedText = data[0].generated_text;
-
-        // フロントエンドが処理しやすいように、Gemini APIのレスポンス形式に似せて整形します
-        const responseForFrontend = {
-            candidates: [{
-                content: {
-                    parts: [{
-                        text: generatedText
-                    }]
-                }
-            }]
-        };
-
-        // Vercelでは `res.status().json()` を使って成功した返事をブラウザに返します
-        res.status(200).json(responseForFrontend);
+        // 成功したレスポンスをそのままブラウザに返します
+        res.status(200).json(data);
 
     } catch (error) {
         console.error('サーバーレス関数エラー:', error);
-        // 途中で何か問題が起きたら、エラー情報をブラウザに返します
         res.status(500).json({ error: error.message });
     }
 }
 
-/**
- * サーバーサイド用のシステムプロンプト生成関数（内容は以前のものと同じ）
- * @returns {string} システムプロンプト
- */
+// createSystemPromptForBackend() 関数は以前のものと全く同じです
 function createSystemPromptForBackend() {
     return `
 あなたは2Dフレーム構造解析モデルを生成する専門のアシスタントです。
