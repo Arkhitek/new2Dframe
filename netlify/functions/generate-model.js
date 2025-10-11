@@ -56,7 +56,7 @@ exports.handler = async (event) => {
             throw new Error("APIキーがサーバーに設定されていません。Netlifyの管理画面で設定してください。");
         }
 
-        const API_URL = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash-latest:generateContent?key=${API_KEY}`;
+        const API_URL = `https://generativelanguage.googleapis.com/v1/models/gemini-1.0-pro:generateContent?key=${API_KEY}`;
         
         // Gemini APIに送るための詳しい依頼方法を書いた定型文（システムプロンプト）
         const systemPrompt = createSystemPromptForBackend();
