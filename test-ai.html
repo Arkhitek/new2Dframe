@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AIモデル生成テスト</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        .test-input {
+            width: 100%;
+            height: 100px;
+            margin: 10px 0;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        .test-button {
+            background-color: #6f42c1;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .test-button:hover {
+            background-color: #5a359a;
+        }
+        .test-button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        .result {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            font-family: monospace;
+        }
+        .success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .loading {
+            background-color: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+        }
+    </style>
+</head>
+<body>
+    <h1>AIモデル生成機能テスト</h1>
+    
+    <div class="test-section">
+        <h2>1. 基本テスト</h2>
+        <p>簡単な構造モデルの生成をテストします。</p>
+        <textarea class="test-input" id="basicTest" placeholder="例: 高さ3m、スパン6mの門型ラーメン。柱脚は固定。">高さ3m、スパン6mの門型ラーメン。柱脚は固定。</textarea>
+        <button class="test-button" onclick="testBasicGeneration()">基本テスト実行</button>
+        <div id="basicResult" class="result" style="display: none;"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>2. カスタムテスト</h2>
+        <p>自由な構造モデルの生成をテストします。</p>
+        <textarea class="test-input" id="customTest" placeholder="構造モデルの説明を入力してください"></textarea>
+        <button class="test-button" onclick="testCustomGeneration()">カスタムテスト実行</button>
+        <div id="customResult" class="result" style="display: none;"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>3. API接続テスト</h2>
+        <p>サーバーレス関数との接続をテストします。</p>
+        <button class="test-button" onclick="testAPIConnection()">API接続テスト</button>
+        <div id="apiResult" class="result" style="display: none;"></div>
+    </div>
+
+    <script>
+        // テスト結果表示関数
+        function showResult(elementId, message, type = 'success') {
+            const element = document.getElementById(elementId);
+            element.textContent = message;
+            element.className = `result ${type}`;
+            element.style.display = 'block';
+        }
+
+        // 基本テスト
+        async function testBasicGeneration() {
+            const button = event.target;
+            const input = document.getElementById('basicTest');
+            const prompt = input.value.trim();
+            
+            if (!prompt) {
+                showResult('basicResult', 'テスト用の指示を入力してください。', 'error');
+                return;
+            }
+
+            button.disabled = true;
+            showResult('basicResult', '🧠 AIがモデルを生成中です...', 'loading');
+
+            try {
+                await generateModelWithAI(prompt);
+                showResult('basicResult', '✅ 基本テストが正常に完了しました！', 'success');
+            } catch (error) {
+                showResult('basicResult', `❌ 基本テストでエラーが発生しました:\n${error.message}`, 'error');
+            } finally {
+                button.disabled = false;
+            }
+        }
+
+        // カスタムテスト
+        async function testCustomGeneration() {
+            const button = event.target;
+            const input = document.getElementById('customTest');
+            const prompt = input.value.trim();
+            
+            if (!prompt) {
+                showResult('customResult', '構造モデルの説明を入力してください。', 'error');
+                return;
+            }
+
+            button.disabled = true;
+            showResult('customResult', '🧠 AIがモデルを生成中です...', 'loading');
+
+            try {
+                await generateModelWithAI(prompt);
+                showResult('customResult', '✅ カスタムテストが正常に完了しました！', 'success');
+            } catch (error) {
+                showResult('customResult', `❌ カスタムテストでエラーが発生しました:\n${error.message}`, 'error');
+            } finally {
+                button.disabled = false;
+            }
+        }
+
+        // API接続テスト
+        async function testAPIConnection() {
+            const button = event.target;
+            button.disabled = true;
+            showResult('apiResult', '🔗 API接続をテスト中...', 'loading');
+
+            try {
+                const response = await fetch('/api/generate-model', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        prompt: 'テスト用の簡単な構造: 2つの節点を1つの部材で接続'
+                    }),
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    showResult('apiResult', `✅ API接続テスト成功！\nレスポンス: ${JSON.stringify(data, null, 2)}`, 'success');
+                } else {
+                    const errorData = await response.json();
+                    showResult('apiResult', `❌ API接続テスト失敗 (${response.status}):\n${errorData.error || 'Unknown error'}`, 'error');
+                }
+            } catch (error) {
+                showResult('apiResult', `❌ API接続テストでエラーが発生しました:\n${error.message}`, 'error');
+            } finally {
+                button.disabled = false;
+            }
+        }
+
+        // generateModelWithAI関数（frame_analyzer.jsからコピー）
+        async function generateModelWithAI(userPrompt) {
+            const API_URL = '/api/generate-model'; 
+
+            try {
+                const requestBody = {
+                    prompt: userPrompt
+                };
+
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(requestBody),
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'サーバーでエラーが発生しました。');
+                }
+
+                const jsonText = extractJsonFromResponse(data);
+                const modelData = JSON.parse(jsonText);
+
+                console.log('生成されたモデルデータ:', modelData);
+                return modelData;
+
+            } catch (error) {
+                console.error('AIモデル生成エラー:', error);
+                throw error;
+            }
+        }
+
+        // extractJsonFromResponse関数（frame_analyzer.jsからコピー）
+        function extractJsonFromResponse(apiResponse) {
+            if (!apiResponse.candidates || !apiResponse.candidates[0].content.parts || !apiResponse.candidates[0].content.parts[0].text) {
+                throw new Error('APIからのレスポンス形式が不正です。');
+            }
+            
+            let text = apiResponse.candidates[0].content.parts[0].text;
+            
+            const jsonMatch = text.match(/```(json)?\s*([\s\S]*?)\s*```/);
+            if (jsonMatch && jsonMatch[2]) {
+                text = jsonMatch[2];
+            }
+            
+            const startIndex = text.indexOf('{');
+            const endIndex = text.lastIndexOf('}');
+            
+            if (startIndex === -1 || endIndex === -1 || endIndex < startIndex) {
+                throw new Error('レスポンス内に有効なJSONオブジェクトが見つかりません。');
+            }
+            
+            return text.substring(startIndex, endIndex + 1);
+        }
+    </script>
+</body>
+</html>

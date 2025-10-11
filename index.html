@@ -172,6 +172,15 @@
                         <button id="zoom-out-btn" title="縮小">-</button>
                     </div>
                 </div>
+                
+                <div class="gemini-generator-section" style="margin: 20px 0; padding: 15px; background-color: #f0f8ff; border: 1px solid #d1e7fd; border-radius: 8px;">
+                    <h4 style="margin-top: 0; color: #005A9C;">🤖 AIによるモデル生成 (Gemini)</h4>
+                    <p style="font-size: 13px; margin-bottom: 10px;">作成したい構造モデルを自然言語で入力してください。(例: 高さ5m、スパン10mの門型ラーメン。柱脚は固定。)</p>
+                    <textarea id="natural-language-input" rows="3" style="width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #ccc; border-radius: 4px;"></textarea>
+                    <button id="generate-model-btn" style="margin-top: 10px; padding: 8px 15px; background-color: #6f42c1; color: white; border: none; border-radius: 4px; cursor: pointer;">AIで生成</button>
+                    <div id="gemini-status-indicator" style="margin-top: 10px; font-size: 13px; display: none;"></div>
+                </div>
+                
                 <div class="canvas-container">
                     <canvas id="model-canvas"></canvas>
                     <div id="member-tooltip" class="member-tooltip hidden">
@@ -445,6 +454,7 @@
             <input type="number" id="popup-dr" step="0.001">
         </div>
         <div class="popup-buttons">
+            <button id="popup-delete-node" style="background-color: #dc3545; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">削除</button>
             <button id="popup-node-props-cancel">キャンセル</button>
             <button id="popup-node-props-save">保存</button>
         </div>

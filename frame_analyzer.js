@@ -1618,6 +1618,20 @@ document.addEventListener('DOMContentLoaded', () => {
         considerSelfWeightCheckbox: document.getElementById('consider-self-weight-checkbox'),
     };
 
+    // AIモデル生成ボタンのイベントリスナー
+    const aiGenerateBtn = document.getElementById('generate-model-btn');
+    if (aiGenerateBtn) {
+        aiGenerateBtn.addEventListener('click', () => {
+            const promptInput = document.getElementById('natural-language-input');
+            const prompt = promptInput.value.trim();
+            if (prompt) {
+                generateModelWithAI(prompt);
+            } else {
+                alert('指示内容を入力してください。');
+            }
+        });
+    }
+
     // デバッグ: エクセル出力ボタンの存在確認
     console.log('エクセル出力ボタンの要素:', elements.exportExcelBtn);
     console.log('ボタンが存在するか:', !!elements.exportExcelBtn);
@@ -3667,11 +3681,38 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
         
+        // 関連する部材荷重の処理
+        const memberLoadsToDelete = [];
+        const memberLoadsToUpdate = [];
+        
+        // 削除される部材の番号を取得
+        const deletedMemberNumbers = membersToDelete.map(r => {
+            const memberIndex = Array.from(elements.membersTable.rows).indexOf(r);
+            return memberIndex + 1; // 1ベースの番号
+        });
+        
+        Array.from(elements.memberLoadsTable.rows).forEach(r => {
+            const m = r.cells[0].querySelector('input');
+            const current = parseInt(m.value);
+            
+            if (deletedMemberNumbers.includes(current)) {
+                memberLoadsToDelete.push(r);
+            } else {
+                // 削除される部材より後の番号を更新
+                const adjustment = deletedMemberNumbers.filter(num => num < current).length;
+                if (adjustment > 0) {
+                    memberLoadsToUpdate.push({ input: m, newValue: current - adjustment });
+                }
+            }
+        });
+        
         // 削除と更新を実行
         membersToDelete.forEach(r => r.remove());
         nodeLoadsToDelete.forEach(r => r.remove());
+        memberLoadsToDelete.forEach(r => r.remove());
         membersToUpdate.forEach(item => item.input.value = item.newValue);
         nodeLoadsToUpdate.forEach(item => item.input.value = item.newValue);
+        memberLoadsToUpdate.forEach(item => item.input.value = item.newValue);
         
         row.remove();
         renumberTables();
@@ -4275,8 +4316,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
             return { i,j,E,strengthProps,I,A,Z,Zx,Zy,ix,iy,length:L,c,s,T,i_conn,j_conn,k_local,material,sectionInfo,sectionAxis };
         });
-        const nodeLoads = Array.from(elements.nodeLoadsTable.rows).map((r, i) => { const n = parseInt(r.cells[0].querySelector('input').value) - 1; if (n < 0 || n >= nodes.length) throw new Error(`節点荷重 ${i+1} の節点番号が不正です。`); return { nodeIndex:n, px:parseFloat(r.cells[1].querySelector('input').value)||0, py:parseFloat(r.cells[2].querySelector('input').value)||0, mz:parseFloat(r.cells[3].querySelector('input').value)||0 }; });
-        const memberLoads = Array.from(elements.memberLoadsTable.rows).map((r, i) => { const m = parseInt(r.cells[0].querySelector('input').value) - 1; if (m < 0 || m >= members.length) throw new Error(`部材荷重 ${i+1} の部材番号が不正です。`); return { memberIndex:m, w:parseFloat(r.cells[1].querySelector('input').value)||0 }; });
+        const nodeLoads = Array.from(elements.nodeLoadsTable.rows).map((r, i) => { 
+            const n = parseInt(r.cells[0].querySelector('input').value) - 1; 
+            if (n < 0 || n >= nodes.length) {
+                console.warn(`節点荷重 ${i+1} の節点番号が不正です (節点番号: ${n + 1}, 最大節点数: ${nodes.length})。この荷重はスキップされます。`);
+                return null; // 無効な荷重は null を返す
+            }
+            return { nodeIndex:n, px:parseFloat(r.cells[1].querySelector('input').value)||0, py:parseFloat(r.cells[2].querySelector('input').value)||0, mz:parseFloat(r.cells[3].querySelector('input').value)||0 }; 
+        }).filter(load => load !== null); // null の荷重を除外
+        const memberLoads = Array.from(elements.memberLoadsTable.rows).map((r, i) => { 
+            const m = parseInt(r.cells[0].querySelector('input').value) - 1; 
+            if (m < 0 || m >= members.length) {
+                console.warn(`部材荷重 ${i+1} の部材番号が不正です (部材番号: ${m + 1}, 最大部材数: ${members.length})。この荷重はスキップされます。`);
+                return null; // 無効な荷重は null を返す
+            }
+            return { memberIndex:m, w:parseFloat(r.cells[1].querySelector('input').value)||0 }; 
+        }).filter(load => load !== null); // null の荷重を除外
         
         // 自重荷重を追加
         const considerSelfWeightCheckbox = document.getElementById('consider-self-weight-checkbox');
@@ -5591,7 +5646,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const metrics = ctx.measureText(text);
         const w = metrics.width;
         const h = 24; // フォントサイズ
-        const padding = 8;
+        const padding = 12; // パディングを増やして重なりを防ぐ
         
         // 節点のモーメント情報を管理（部材インデックスと端部情報を含む）
         const momentKey = `${nodeIndex}_${memberIndex}_${memberEnd}`;
@@ -5602,16 +5657,16 @@ document.addEventListener('DOMContentLoaded', () => {
         if (memberLineStart && memberLineEnd) {
             // 部材ライン上で節点から少し離れた位置に配置
             const memberLength = Math.sqrt((memberLineEnd.x - memberLineStart.x) ** 2 + (memberLineEnd.y - memberLineStart.y) ** 2);
-            const offsetFromNode = 15; // 節点から15ピクセル離れた位置
+            const offsetFromNode = 30; // 節点から30ピクセル離れた位置に変更
             
             if (memberEnd === 'i') {
                 // 節点i側の場合、部材ライン上で節点から少し離れた位置
-                const ratio = Math.min(offsetFromNode / memberLength, 0.3); // 最大30%の位置まで
+                const ratio = Math.min(offsetFromNode / memberLength, 0.25); // 最大25%の位置まで
                 labelX = memberLineStart.x + (memberLineEnd.x - memberLineStart.x) * ratio;
                 labelY = memberLineStart.y + (memberLineEnd.y - memberLineStart.y) * ratio;
             } else {
                 // 節点j側の場合、部材ライン上で節点から少し離れた位置
-                const ratio = Math.max(1 - offsetFromNode / memberLength, 0.7); // 最小70%の位置から
+                const ratio = Math.max(1 - offsetFromNode / memberLength, 0.75); // 最小75%の位置から
                 labelX = memberLineStart.x + (memberLineEnd.x - memberLineStart.x) * ratio;
                 labelY = memberLineStart.y + (memberLineEnd.y - memberLineStart.y) * ratio;
             }
@@ -5621,20 +5676,52 @@ document.addEventListener('DOMContentLoaded', () => {
             labelY = nodeY - h - padding;
         }
         
+        // 重複チェックと位置調整
+        let finalLabelX = labelX;
+        let finalLabelY = labelY;
+        const rect = { x1: labelX - w/2, y1: labelY - h/2, x2: labelX + w/2, y2: labelY + h/2 };
+        const paddedRect = { x1: rect.x1 - padding, y1: rect.y1 - padding, x2: rect.x2 + padding, y2: rect.y2 + padding };
+        
+        // 既存のラベルとの重複をチェック
+        let isOverlapping = false;
+        for (const existing of drawnLabels) {
+            if (!(paddedRect.x2 < existing.x1 || paddedRect.x1 > existing.x2 || paddedRect.y2 < existing.y1 || paddedRect.y1 > existing.y2)) {
+                isOverlapping = true;
+                break;
+            }
+        }
+        
+        // 重複している場合は位置を調整
+        if (isOverlapping && memberLineStart && memberLineEnd) {
+            // 部材ライン上でより離れた位置を試す
+            const memberLength = Math.sqrt((memberLineEnd.x - memberLineStart.x) ** 2 + (memberLineEnd.y - memberLineStart.y) ** 2);
+            const extendedOffset = 50; // より離れた位置
+            
+            if (memberEnd === 'i') {
+                const ratio = Math.min(extendedOffset / memberLength, 0.4);
+                finalLabelX = memberLineStart.x + (memberLineEnd.x - memberLineStart.x) * ratio;
+                finalLabelY = memberLineStart.y + (memberLineEnd.y - memberLineStart.y) * ratio;
+            } else {
+                const ratio = Math.max(1 - extendedOffset / memberLength, 0.6);
+                finalLabelX = memberLineStart.x + (memberLineEnd.x - memberLineStart.x) * ratio;
+                finalLabelY = memberLineStart.y + (memberLineEnd.y - memberLineStart.y) * ratio;
+            }
+        }
+        
         // テキストを描画（四角囲いなし）
         ctx.fillStyle = '#333';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(text, labelX, labelY);
+        ctx.fillText(text, finalLabelX, finalLabelY);
         
         // 描画済みラベルとして登録（重複チェック用）
-        const rect = { x1: labelX - w/2, y1: labelY - h/2, x2: labelX + w/2, y2: labelY + h/2 };
-        const paddedRect = { x1: rect.x1 - padding, y1: rect.y1 - padding, x2: rect.x2 + padding, y2: rect.y2 + padding };
-        drawnLabels.push(paddedRect);
+        const finalRect = { x1: finalLabelX - w/2, y1: finalLabelY - h/2, x2: finalLabelX + w/2, y2: finalLabelY + h/2 };
+        const finalPaddedRect = { x1: finalRect.x1 - padding, y1: finalRect.y1 - padding, x2: finalRect.x2 + padding, y2: finalRect.y2 + padding };
+        drawnLabels.push(finalPaddedRect);
         
         nodeLabels.set(momentKey, {
             text: text,
-            position: { x: labelX, y: labelY },
+            position: { x: finalLabelX, y: finalLabelY },
             nodePosition: { x: nodeX, y: nodeY }
         });
     };
@@ -7743,7 +7830,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const props = {E:E_val, F:F_val, I:I_m4, A:A_m2, Z:Z_m3, i_conn:memberRow.cells[iConnIndex].querySelector('select').value, j_conn:memberRow.cells[jConnIndex].querySelector('select').value};
                 memberRow.querySelector('.delete-row-btn').onclick.apply(memberRow.querySelector('.delete-row-btn'));
-                addRow(elements.nodesTable, [`#`,`<input type="number" value="${finalCoords.x.toFixed(2)}">`,`<input type="number" value="${finalCoords.y.toFixed(2)}">`,`<select><option value="free" selected>自由</option><option value="pinned">ピン</option><option value="fixed">固定</option><option value="roller">ローラー</option></select>`], false);
+                addRow(elements.nodesTable, [`#`,`<input type="number" value="${finalCoords.x.toFixed(2)}">`,`<input type="number" value="${finalCoords.y.toFixed(2)}">`,`<select><option value="free" selected>自由</option><option value="pinned">ピン</option><option value="fixed">固定</option><option value="roller">ローラー</option></select>`, `<input type="number" value="0" step="0.1">`, `<input type="number" value="0" step="0.1">`, `<input type="number" value="0" step="0.001">`], false);
                 const newNodeId = elements.nodesTable.rows.length;
                 addRow(elements.membersTable, [`#`, ...memberRowHTML(startNodeId, newNodeId, props.E, props.F, props.I, props.A, props.Z, props.i_conn, 'rigid')], false);
                 addRow(elements.membersTable, [`#`, ...memberRowHTML(newNodeId, endNodeId, props.E, props.F, props.I, props.A, props.Z, 'rigid', props.j_conn)], false);
@@ -7753,7 +7840,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const snappedX=Math.round(modelCoords.x/spacing)*spacing, snappedY=Math.round(modelCoords.y/spacing)*spacing;
                 const dist=Math.sqrt((modelCoords.x-snappedX)**2+(modelCoords.y-snappedY)**2);
                 if (elements.gridToggle.checked && dist < snapTolerance) { modelCoords.x=snappedX; modelCoords.y=snappedY; }
-                addRow(elements.nodesTable, [`#`,`<input type="number" value="${modelCoords.x.toFixed(2)}">`,`<input type="number" value="${modelCoords.y.toFixed(2)}">`,`<select><option value="free" selected>自由</option><option value="pinned">ピン</option><option value="fixed">固定</option><option value="roller">ローラー</option></select>`]); 
+                addRow(elements.nodesTable, [`#`,`<input type="number" value="${modelCoords.x.toFixed(2)}">`,`<input type="number" value="${modelCoords.y.toFixed(2)}">`,`<select><option value="free" selected>自由</option><option value="pinned">ピン</option><option value="fixed">固定</option><option value="roller">ローラー</option></select>`, `<input type="number" value="0" step="0.1">`, `<input type="number" value="0" step="0.1">`, `<input type="number" value="0" step="0.001">`]); 
             }
         } else if (canvasMode === 'addMember') {
             let targetNodeIndex = clickedNodeIndex;
@@ -7793,7 +7880,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 
                 // 新規節点をテーブルに追加
-                addRow(elements.nodesTable, [`#`, `<input type="number" value="${snappedX.toFixed(2)}">`, `<input type="number" value="${snappedY.toFixed(2)}">`, `<select><option value="free" selected>自由</option><option value="pinned">ピン</option><option value="fixed">固定</option><option value="roller">ローラー</option></select>`]);
+                addRow(elements.nodesTable, [`#`, `<input type="number" value="${snappedX.toFixed(2)}">`, `<input type="number" value="${snappedY.toFixed(2)}">`, `<select><option value="free" selected>自由</option><option value="pinned">ピン</option><option value="fixed">固定</option><option value="roller">ローラー</option></select>`, `<input type="number" value="0" step="0.1">`, `<input type="number" value="0" step="0.1">`, `<input type="number" value="0" step="0.001">`]);
                 
                 // 新規作成された節点のインデックスを取得（テーブルの最後の行）
                 const nodeRows = elements.nodesTable.getElementsByTagName('tr');
@@ -7923,15 +8010,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.error('❌ nodeLoadPopup 要素が見つかりません');
             }
         } else if (selectedNodeIndex !== -1) {
-            console.log('💡 節点コンテキストメニュー表示 - 節点:', selectedNodeIndex + 1);
-            if (elements.nodeContextMenu) {
-                elements.nodeContextMenu.style.display='block'; 
-                elements.nodeContextMenu.style.left=`${e.pageX}px`; 
-                elements.nodeContextMenu.style.top=`${e.pageY}px`;
-                console.log('✅ 節点コンテキストメニュー表示完了');
-            } else {
-                console.error('❌ nodeContextMenu 要素が見つかりません');
-            }
+            console.log('💡 節点プロパティ編集表示 - 節点:', selectedNodeIndex + 1);
+            // 直接節点プロパティ編集を開く
+            openNodeEditor(selectedNodeIndex);
         } else if (selectedMemberIndex !== -1) {
             console.log('💡 部材プロパティポップアップ表示開始 - 部材:', selectedMemberIndex + 1);
             const memberRow = elements.membersTable.rows[selectedMemberIndex];
@@ -8607,19 +8688,42 @@ document.addEventListener('DOMContentLoaded', () => {
         window.selectedNodeIndex = nodeIndex;
 
         const nodeRow = elements.nodesTable.rows[nodeIndex];
-        const loadRow = Array.from(elements.nodeLoadsTable.rows).find(row => parseInt(row.cells[0].querySelector('input').value) - 1 === nodeIndex);
+        
+        // 節点テーブルの行が存在しない場合のエラーハンドリング
+        if (!nodeRow) {
+            console.error('❌ 節点テーブルの行が見つかりません:', nodeIndex);
+            alert(`節点 ${nodeIndex + 1} のテーブル行が見つかりません。`);
+            return;
+        }
 
-        // 各入力フィールドに現在の値を設定
-        document.getElementById('popup-x').value = nodeRow.cells[1].querySelector('input').value;
-        document.getElementById('popup-y').value = nodeRow.cells[2].querySelector('input').value;
-        document.getElementById('popup-support').value = nodeRow.cells[3].querySelector('select').value;
-        document.getElementById('popup-dx').value = nodeRow.cells[4].querySelector('input').value;
-        document.getElementById('popup-dy').value = nodeRow.cells[5].querySelector('input').value;
-        document.getElementById('popup-dr').value = nodeRow.cells[6].querySelector('input').value;
+        const loadRow = Array.from(elements.nodeLoadsTable.rows).find(row => {
+            const input = row.cells[0]?.querySelector('input');
+            return input && parseInt(input.value) - 1 === nodeIndex;
+        });
 
-        document.getElementById('popup-px').value = loadRow ? loadRow.cells[1].querySelector('input').value : '0';
-        document.getElementById('popup-py').value = loadRow ? loadRow.cells[2].querySelector('input').value : '0';
-        document.getElementById('popup-mz').value = loadRow ? loadRow.cells[3].querySelector('input').value : '0';
+        // 各入力フィールドに現在の値を設定（nullチェック付き）
+        const xInput = nodeRow.cells[1]?.querySelector('input');
+        const yInput = nodeRow.cells[2]?.querySelector('input');
+        const supportSelect = nodeRow.cells[3]?.querySelector('select');
+        const dxInput = nodeRow.cells[4]?.querySelector('input');
+        const dyInput = nodeRow.cells[5]?.querySelector('input');
+        const drInput = nodeRow.cells[6]?.querySelector('input');
+
+        document.getElementById('popup-x').value = xInput ? xInput.value : '0';
+        document.getElementById('popup-y').value = yInput ? yInput.value : '0';
+        document.getElementById('popup-support').value = supportSelect ? supportSelect.value : 'free';
+        document.getElementById('popup-dx').value = dxInput ? dxInput.value : '0';
+        document.getElementById('popup-dy').value = dyInput ? dyInput.value : '0';
+        document.getElementById('popup-dr').value = drInput ? drInput.value : '0';
+
+        // 荷重データの設定（nullチェック付き）
+        const pxInput = loadRow?.cells[1]?.querySelector('input');
+        const pyInput = loadRow?.cells[2]?.querySelector('input');
+        const mzInput = loadRow?.cells[3]?.querySelector('input');
+        
+        document.getElementById('popup-px').value = pxInput ? pxInput.value : '0';
+        document.getElementById('popup-py').value = pyInput ? pyInput.value : '0';
+        document.getElementById('popup-mz').value = mzInput ? mzInput.value : '0';
         
         const popup = elements.nodePropsPopup;
         if (!popup) {
@@ -8685,6 +8789,33 @@ document.addEventListener('DOMContentLoaded', () => {
     // 新しい節点プロパティポップアップのキャンセルボタンの処理
     document.getElementById('popup-node-props-cancel').onclick = () => {
         elements.nodePropsPopup.style.display = 'none';
+    };
+
+    // 節点削除ボタンの処理
+    document.getElementById('popup-delete-node').onclick = () => {
+        if (selectedNodeIndex === null) return;
+        
+        // 確認ダイアログを表示
+        if (confirm(`節点 ${selectedNodeIndex + 1} を削除しますか？\nこの節点に接続されている部材も削除されます。`)) {
+            // 節点テーブルの行と削除ボタンの存在確認
+            const nodeRow = elements.nodesTable.rows[selectedNodeIndex];
+            const deleteBtn = nodeRow?.querySelector('.delete-row-btn');
+            
+            if (deleteBtn) {
+                // 節点テーブルの削除ボタンをクリック（既存の削除処理を利用）
+                deleteBtn.click();
+            } else {
+                console.error('❌ 削除ボタンが見つかりません:', selectedNodeIndex);
+                alert('削除ボタンが見つかりません。テーブルから直接削除してください。');
+            }
+            
+            // ポップアップを閉じる
+            elements.nodePropsPopup.style.display = 'none';
+            
+            // 選択状態をリセット
+            selectedNodeIndex = null;
+            window.selectedNodeIndex = null;
+        }
     };
 
     document.getElementById('help-select').onclick = () => alert('【選択/移動モード】\n・節点をクリック＆ドラッグして移動します。\n・節点、部材、荷重を右クリックすると、編集メニューが表示されます。\n・Shiftキーを押しながら空白部分をドラッグすると矩形範囲で節点または部材を追加/解除選択できます。\n・Ctrl（⌘）キーを押しながら空白部分をドラッグすると範囲選択をやり直せます。\n・矩形内に節点と部材が混在する場合は、解除後にどちらを選択するかのメニューが表示されます。\n\n■複数選択機能：\n・Shiftキーを押しながら節点や部材をクリックすると複数選択できます。\n・選択された要素は赤色で強調表示されます。\n・Escapeキーで選択をクリアできます。\n・選択中の要素は一括編集が可能です。');
@@ -10400,6 +10531,7 @@ const loadPreset = (index) => {
     };
     elements.addNodeLoadBtn.onclick = () => { addRow(elements.nodeLoadsTable, ['<input type="number" value="1">', '<input type="number" value="0">', '<input type="number" value="0">', '<input type="number" value="0">']); };
     elements.addMemberLoadBtn.onclick = () => { addRow(elements.memberLoadsTable, ['<input type="number" value="1">', '<input type="number" value="0">']); };
+    
     
     const saveInputData = () => {
         try {
@@ -12434,7 +12566,10 @@ const initializeFrameGenerator = () => {
                 <option value="fixed" ${support === 'fixed' ? 'selected' : ''}>固定</option>
                 <option value="roller-x" ${support === 'roller-x' ? 'selected' : ''}>ローラー(X)</option>
                 <option value="roller-y" ${support === 'roller-y' ? 'selected' : ''}>ローラー(Y)</option>
-            </select>`
+            </select>`,
+            `<input type="number" value="0" step="0.1">`, // 強制変位 δx (mm)
+            `<input type="number" value="0" step="0.1">`, // 強制変位 δy (mm)
+            `<input type="number" value="0" step="0.001">` // 強制回転 θz (rad)
         ];
         
         // 行を手動で作成
@@ -12964,3 +13099,168 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
+
+// ==========================================================================
+// Gemini APIによるAIモデル生成機能
+// ==========================================================================
+
+/**
+ * Gemini APIを使用して自然言語からモデルを生成するメイン関数
+ * @param {string} userPrompt ユーザーが入力した指示
+ */
+async function generateModelWithAI(userPrompt) {
+    const aiGenerateBtn = document.getElementById('generate-model-btn');
+    const aiStatus = document.getElementById('gemini-status-indicator');
+
+    // ★★★ 変更点 ★★★
+    // 宛先をGoogleから、我々が作った仲介役プログラムの住所に変更します。
+    // netlify.tomlの設定により、このURLへのアクセスは自動的にサーバーレス関数に転送されます。
+    const API_URL = '/api/generate-model'; 
+
+    // UIを「生成中」の状態にします
+    aiGenerateBtn.disabled = true;
+    aiStatus.style.display = 'block';
+    aiStatus.textContent = '🧠 AIがモデルを生成中です...';
+    aiStatus.style.color = '#005A9C';
+
+    try {
+        // ★★★ 変更点 ★★★
+        // 仲介役に送るリクエストを作成します。秘密の鍵(APIキー)は含めません。
+        const requestBody = {
+            prompt: userPrompt
+        };
+
+        // 我々の仲介役プログラムにリクエストを送信します
+        const response = await fetch(API_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestBody),
+        });
+
+        // 仲介役からの返答を受け取ります
+        const data = await response.json();
+
+        // 返答に問題があった場合のエラー処理
+        if (!response.ok) {
+            throw new Error(data.error || 'サーバーでエラーが発生しました。');
+        }
+
+        // 仲介役が転送してくれたGeminiの応答から、JSON部分だけを安全に取り出します
+        const jsonText = extractJsonFromResponse(data);
+        const modelData = JSON.parse(jsonText);
+
+        aiStatus.textContent = '✅ モデルデータを適用しています...';
+
+        // 取り出したモデルデータを、アプリケーションのテーブルに反映させます
+        applyGeneratedModel(modelData);
+
+        alert('AIによるモデル生成が完了しました。');
+
+    } catch (error) {
+        console.error('AIモデル生成エラー:', error);
+        aiStatus.textContent = `❌ エラー: ${error.message}`;
+        aiStatus.style.color = '#dc3545';
+        alert(`AIによるモデル生成に失敗しました。\nエラー: ${error.message}`);
+    } finally {
+        // UIの状態を元に戻します
+        aiGenerateBtn.disabled = false;
+        setTimeout(() => {
+            if (aiStatus.textContent.startsWith('❌')) {
+                 // エラーメッセージは少し長めに表示
+            } else {
+                aiStatus.style.display = 'none';
+            }
+        }, 5000);
+    }
+}
+
+/**
+ * Gemini APIのレスポンスからJSON部分を安全に抽出する関数
+ * @param {object} apiResponse APIからのレスポンスオブジェクト
+ * @returns {string} 抽出されたJSON文字列
+ */
+function extractJsonFromResponse(apiResponse) {
+    if (!apiResponse.candidates || !apiResponse.candidates[0].content.parts || !apiResponse.candidates[0].content.parts[0].text) {
+        throw new Error('APIからのレスポンス形式が不正です。');
+    }
+    
+    let text = apiResponse.candidates[0].content.parts[0].text;
+    
+    const jsonMatch = text.match(/```(json)?\s*([\s\S]*?)\s*```/);
+    if (jsonMatch && jsonMatch[2]) {
+        text = jsonMatch[2];
+    }
+    
+    const startIndex = text.indexOf('{');
+    const endIndex = text.lastIndexOf('}');
+    
+    if (startIndex === -1 || endIndex === -1 || endIndex < startIndex) {
+        throw new Error('レスポンス内に有効なJSONオブジェクトが見つかりません。');
+    }
+    
+    return text.substring(startIndex, endIndex + 1);
+}
+
+/**
+ * 生成されたモデルデータをアプリケーションに適用する関数
+ * @param {object} modelData APIから受け取ったモデルデータ
+ */
+function applyGeneratedModel(modelData) {
+    if (!modelData || !modelData.nodes) {
+        throw new Error('生成されたモデルデータが無効です。');
+    }
+
+    if (confirm('AIが生成したモデルを適用します。現在のモデルデータはクリアされますが、よろしいですか？')) {
+        // 既存の`restoreState`関数を再利用して、データをテーブルに反映します
+        
+        // 適用中の再描画などを一時的に抑制するためのフラグ
+        window.isLoadingPreset = true; 
+        
+        pushState(); // 現在の状態を「元に戻す」ために保存
+        
+        // 全てのテーブルをクリア
+        elements.nodesTable.innerHTML = '';
+        elements.membersTable.innerHTML = '';
+        elements.nodeLoadsTable.innerHTML = '';
+        elements.memberLoadsTable.innerHTML = '';
+        
+        // APIからのデータを、アプリが理解できる形式に変換
+        const state = {
+            nodes: modelData.nodes.map(n => ({ 
+                x: n.x, y: n.y, support: n.s, dx_forced: 0, dy_forced: 0, r_forced: 0 
+            })),
+            members: modelData.members.map(m => ({
+                i: m.i, j: m.j,
+                E: m.E || '205000',
+                strengthType: 'F-value', // デフォルト
+                strengthValue: m.F || '235',
+                I: (m.I * 1e8).toString(), // m4 -> cm4
+                A: (m.A * 1e4).toString(), // m2 -> cm2
+                Z: (m.Z * 1e6).toString(), // m3 -> cm3
+                i_conn: m.i_conn || 'rigid',
+                j_conn: m.j_conn || 'rigid'
+            })),
+            nodeLoads: (modelData.nl || []).map(l => ({ 
+                node: l.n, px: l.px || 0, py: l.py || 0, mz: l.mz || 0 
+            })),
+            memberLoads: (modelData.ml || []).map(l => ({ 
+                member: l.m, w: l.w || 0 
+            }))
+        };
+        
+        // データをテーブルに流し込み
+        restoreState(state);
+        
+        window.isLoadingPreset = false;
+
+        // 表示を更新
+        updateSelfWeightDisplay();
+        panZoomState.isInitialized = false; 
+        
+        // 再描画と再計算
+        drawOnCanvas();
+        runFullAnalysis();
+    }
+}
