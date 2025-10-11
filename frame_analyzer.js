@@ -1565,6 +1565,8 @@ function hideMemberTooltip() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    console.log('🔍 DOMContentLoadedイベントが発火しました');
+    
     // DOM Elements
     const elements = {
         nodesTable: document.getElementById('nodes-table').getElementsByTagName('tbody')[0],
@@ -1623,7 +1625,14 @@ document.addEventListener('DOMContentLoaded', () => {
     // デバッグ: 重要なポップアップ要素の存在確認
     console.log('🔍 ポップアップ要素チェック:', {
         memberPropsPopup: !!elements.memberPropsPopup,
-        nodePropsPopup: !!elements.nodePropsPopup
+        nodePropsPopup: !!elements.nodePropsPopup,
+        addMemberPopup: !!elements.addMemberPopup
+    });
+    
+    // デバッグ: 部材追加ボタンの存在確認
+    console.log('🔍 部材追加ボタンチェック:', {
+        modeAddMemberBtn: !!elements.modeAddMemberBtn,
+        buttonElement: elements.modeAddMemberBtn
     });
 
     let panZoomState = { scale: 1, offsetX: 0, offsetY: 0, isInitialized: false };
@@ -1631,6 +1640,10 @@ document.addEventListener('DOMContentLoaded', () => {
     let lastAnalysisResult = null;
     let lastSectionCheckResults = null;
     let lastDisplacementScale = 0;
+    
+    // マウス位置を追跡（視覚的フィードバック用）
+    let currentMouseX = 0;
+    let currentMouseY = 0;
 
     const dispScaleInput = document.getElementById('disp-scale-input');
     dispScaleInput.addEventListener('change', (e) => {
@@ -5410,6 +5423,23 @@ document.addEventListener('DOMContentLoaded', () => {
                     ctx.arc(pos.x, pos.y, 8, 0, 2 * Math.PI);
                     ctx.fill();
                 }
+                
+                // 部材追加モードでの視覚的フィードバック
+                if (canvasMode === 'addMember') {
+                    ctx.strokeStyle = 'rgba(0, 150, 255, 0.8)';
+                    ctx.lineWidth = 2;
+                    ctx.setLineDash([5, 5]);
+                    ctx.beginPath();
+                    ctx.arc(currentMouseX, currentMouseY, 12, 0, 2 * Math.PI);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                    
+                    // 新規節点作成予定を示すテキスト
+                    ctx.fillStyle = 'rgba(0, 150, 255, 0.9)';
+                    ctx.font = 'bold 12px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('クリックで節点選択または新規作成', currentMouseX, currentMouseY - 20);
+                }
             }
         } catch (e) {
             console.error("Drawing error:", e);
@@ -6448,11 +6478,57 @@ document.addEventListener('DOMContentLoaded', () => {
             const p1 = transform(n_i.x+p1_offset_x, n_i.y+p1_offset_y), p2 = transform(n_j.x+p1_offset_x, n_j.y+p1_offset_y);
             ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y);
             ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.setLineDash([5, 5]); ctx.stroke(); ctx.setLineDash([]);
+            // 最大検定比の位置を計算
+            let maxRatioPos = null;
+            let maxRatioValue = 0;
+            let maxRatioK = 0;
+            
+            // 各部材の最大検定比の位置を特定
+            for (let k = 0; k <= 20; k++) {
+                if (res.ratios[k] > maxRatioValue) {
+                    maxRatioValue = res.ratios[k];
+                    maxRatioK = k;
+                }
+            }
+            
+            // 最大検定比の位置の座標を計算
+            const x_local_max = (maxRatioK/20) * m.length;
+            const offset_max = -maxRatioValue * ratioScale;
+            const globalX_max = n_i.x + x_local_max * m.c - offset_max * m.s;
+            const globalY_max = n_i.y + x_local_max * m.s + offset_max * m.c;
+            maxRatioPos = transform(globalX_max, globalY_max);
+            
+            // 赤丸印を描画（サイズを半分に）
+            ctx.beginPath();
+            ctx.arc(maxRatioPos.x, maxRatioPos.y, 4, 0, 2 * Math.PI);
+            ctx.fillStyle = 'red';
+            ctx.fill();
+            ctx.strokeStyle = 'darkred';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+            
+            // 数値を赤丸印の近傍に表示（フォントサイズを2倍に）
+            const originalFont = ctx.font;
+            ctx.font = 'bold 28px Arial'; // 元の14pxから28pxに変更
             ctx.fillStyle = res.maxRatio > 1.0 ? 'red' : '#333';
-            const mid_offset = -res.maxRatio * ratioScale * 0.5;
-            const mid_offset_x = -mid_offset*m.s, mid_offset_y = mid_offset*m.c;
-            const mid_pos = transform((n_i.x+n_j.x)/2+mid_offset_x, (n_i.y+n_j.y)/2+mid_offset_y);
-            labelManager.draw(ctx, res.maxRatio.toFixed(2), mid_pos.x, mid_pos.y, nodeObstacles);
+            const labelOffsetX = 20;
+            const labelOffsetY = -15;
+            const labelX = maxRatioPos.x + labelOffsetX;
+            const labelY = maxRatioPos.y + labelOffsetY;
+            
+            // 赤丸印と数値の間を線で結ぶ
+            ctx.beginPath();
+            ctx.moveTo(maxRatioPos.x, maxRatioPos.y);
+            ctx.lineTo(labelX, labelY);
+            ctx.strokeStyle = res.maxRatio > 1.0 ? 'red' : '#333';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            // 数値を描画
+            labelManager.draw(ctx, res.maxRatio.toFixed(2), labelX, labelY, nodeObstacles);
+            
+            // フォントを元に戻す
+            ctx.font = originalFont;
         });
 
         // 部材番号を表示（重複回避版）
@@ -6826,8 +6902,14 @@ document.addEventListener('DOMContentLoaded', () => {
     elements.modeSelectBtn.onclick = () => setCanvasMode('select');
     elements.modeAddNodeBtn.onclick = () => setCanvasMode('addNode');
     elements.modeAddMemberBtn.onclick = () => {
+        console.log('🔍 部材追加ボタンがクリックされました');
+        
         // ポップアップ内のE入力欄を生成
         const eContainer = document.getElementById('add-popup-e-container');
+        if (!eContainer) {
+            console.error('❌ add-popup-e-container要素が見つかりません');
+            return;
+        }
         eContainer.innerHTML = createEInputHTML('add-popup-e', newMemberDefaults.E);
 
         // ポップアップ内のF入力欄を生成
@@ -6876,25 +6958,62 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // ポップアップを画面中央に表示
         const popup = elements.addMemberPopup;
+        if (!popup) {
+            console.error('❌ addMemberPopup要素が見つかりません');
+            return;
+        }
+        console.log('✅ ポップアップを表示します');
         popup.style.display = 'block';
         
-        // ポップアップのサイズを取得（デフォルト値を設定）
+        // ポップアップを一度表示してサイズを取得
+        popup.style.display = 'block';
+        popup.style.visibility = 'hidden'; // 一時的に非表示にしてサイズ取得
+        
+        // ポップアップのサイズを取得
         const popupRect = popup.getBoundingClientRect();
-        const popupWidth = popupRect.width || 400;  // デフォルト幅
-        const popupHeight = popupRect.height || 350; // デフォルト高さ
+        const popupWidth = popupRect.width || 380;  // デフォルト幅
+        const popupHeight = popupRect.height || 400; // デフォルト高さ
+        
+        console.log('🔍 ポップアップサイズ:', { width: popupWidth, height: popupHeight });
+        
         const windowWidth = window.innerWidth;
         const windowHeight = window.innerHeight;
-        const availableHeight = Math.min(windowHeight, document.documentElement.clientHeight);
-        const minMargin = 10;
-        const bottomMargin = 20; // タスクバー対策
+        const minMargin = 20;
         
-        // 画面内に収まるように配置
-        const left = Math.max(minMargin, Math.min((windowWidth - popupWidth) / 2, windowWidth - popupWidth - minMargin));
-        const top = Math.max(minMargin, Math.min((availableHeight - popupHeight) / 2, availableHeight - popupHeight - bottomMargin));
+        // 画面中央に配置
+        const left = Math.max(minMargin, (windowWidth - popupWidth) / 2);
+        const top = Math.max(minMargin, (windowHeight - popupHeight) / 2);
+        
+        console.log('🔍 ポップアップ位置:', { left, top, windowWidth, windowHeight });
         
         popup.style.left = `${left}px`;
         popup.style.top = `${top}px`;
         popup.style.position = 'fixed';
+        popup.style.visibility = 'visible'; // 表示に戻す
+        popup.style.display = 'block';
+        
+        // ポップアップが実際に表示されているかチェック
+        setTimeout(() => {
+            const finalRect = popup.getBoundingClientRect();
+            console.log('🔍 ポップアップ最終状態:', {
+                display: popup.style.display,
+                visibility: popup.style.visibility,
+                position: popup.style.position,
+                left: popup.style.left,
+                top: popup.style.top,
+                zIndex: popup.style.zIndex,
+                rect: finalRect
+            });
+            
+            if (finalRect.width === 0 || finalRect.height === 0) {
+                console.error('❌ ポップアップのサイズが0です');
+            }
+            
+            if (finalRect.left < 0 || finalRect.top < 0 || 
+                finalRect.right > window.innerWidth || finalRect.bottom > window.innerHeight) {
+                console.warn('⚠️ ポップアップが画面外に表示されています');
+            }
+        }, 100);
     };
     // 部材追加設定の断面選択ボタン
     document.getElementById('add-popup-select-section').onclick = () => {
@@ -7090,6 +7209,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const mouseX = e.clientX - rect.left;
         const mouseY = e.clientY - rect.top;
         
+        // マウス位置を保存（視覚的フィードバック用）
+        currentMouseX = mouseX;
+        currentMouseY = mouseY;
+        
+        // 部材追加モードの場合はリアルタイムで視覚的フィードバックを更新
+        if (canvasMode === 'addMember') {
+            drawOnCanvas();
+        }
+        
         // デバッグ：1%の確率でマウス移動の詳細を出力
         if (Math.random() < 0.01) {
             console.log('🖱️ マウス移動デバッグ:', {
@@ -7227,15 +7355,57 @@ document.addEventListener('DOMContentLoaded', () => {
                 addRow(elements.nodesTable, [`#`,`<input type="number" value="${modelCoords.x.toFixed(2)}">`,`<input type="number" value="${modelCoords.y.toFixed(2)}">`,`<select><option value="free" selected>自由</option><option value="pinned">ピン</option><option value="fixed">固定</option><option value="roller">ローラー</option></select>`]); 
             }
         } else if (canvasMode === 'addMember') {
-            if (clickedNodeIndex !== -1) {
-                if (firstMemberNode === null) { firstMemberNode = clickedNodeIndex; }
-                else {
-                    if (firstMemberNode !== clickedNodeIndex) {
+            let targetNodeIndex = clickedNodeIndex;
+            
+            // 節点が存在しない場合は新規節点を作成
+            if (clickedNodeIndex === -1) {
+                console.log('🔍 節点が存在しない位置をクリック - 新規節点を作成します');
+                
+                // マウス位置をモデル座標に変換
+                let modelCoords = inverseTransform(mouseX, mouseY);
+                if (!modelCoords) {
+                    console.error('❌ 座標変換に失敗しました');
+                    return;
+                }
+                
+                // グリッドスナップ処理
+                const spacing = parseFloat(elements.gridSpacing.value);
+                const snapTolerance = spacing * 0.3;
+                let snappedX = modelCoords.x;
+                let snappedY = modelCoords.y;
+                
+                if (elements.gridToggle.checked) {
+                    snappedX = Math.round(modelCoords.x / spacing) * spacing;
+                    snappedY = Math.round(modelCoords.y / spacing) * spacing;
+                    const dist = Math.sqrt((modelCoords.x - snappedX) ** 2 + (modelCoords.y - snappedY) ** 2);
+                    if (dist < snapTolerance) {
+                        snappedX = modelCoords.x;
+                        snappedY = modelCoords.y;
+                    }
+                }
+                
+                // 新規節点をテーブルに追加
+                addRow(elements.nodesTable, [`#`, `<input type="number" value="${snappedX.toFixed(2)}">`, `<input type="number" value="${snappedY.toFixed(2)}">`, `<select><option value="free" selected>自由</option><option value="pinned">ピン</option><option value="fixed">固定</option><option value="roller">ローラー</option></select>`]);
+                
+                // 新規作成された節点のインデックスを取得（テーブルの最後の行）
+                const nodeRows = elements.nodesTable.getElementsByTagName('tr');
+                targetNodeIndex = nodeRows.length - 1;
+                
+                console.log('✅ 新規節点を作成しました:', { index: targetNodeIndex, x: snappedX, y: snappedY });
+            }
+            
+            if (targetNodeIndex !== -1) {
+                if (firstMemberNode === null) { 
+                    firstMemberNode = targetNodeIndex;
+                    console.log('🔍 部材の始点を設定:', firstMemberNode);
+                } else {
+                    if (firstMemberNode !== targetNodeIndex) {
                         const I_m4 = parseFloat(newMemberDefaults.I)*1e-8, A_m2 = parseFloat(newMemberDefaults.A)*1e-4, Z_m3 = parseFloat(newMemberDefaults.Z)*1e-6;
                         const sectionName = newMemberDefaults.sectionName || '';
                         const sectionAxis = newMemberDefaults.sectionAxis || '';
                         console.log('🔍 部材追加: newMemberDefaults:', { sectionName, sectionAxis, I: newMemberDefaults.I, A: newMemberDefaults.A, Z: newMemberDefaults.Z });
-                        addRow(elements.membersTable, [`#`, ...memberRowHTML(firstMemberNode+1, clickedNodeIndex+1, newMemberDefaults.E, newMemberDefaults.F, I_m4, A_m2, Z_m3, newMemberDefaults.i_conn, newMemberDefaults.j_conn, sectionName, sectionAxis)]);
+                        addRow(elements.membersTable, [`#`, ...memberRowHTML(firstMemberNode+1, targetNodeIndex+1, newMemberDefaults.E, newMemberDefaults.F, I_m4, A_m2, Z_m3, newMemberDefaults.i_conn, newMemberDefaults.j_conn, sectionName, sectionAxis)]);
+                        console.log('✅ 部材を作成しました:', { from: firstMemberNode, to: targetNodeIndex });
                     }
                     firstMemberNode = null;
                 }
@@ -7853,16 +8023,19 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     // 全てのポップアップにドラッグ機能を適用
-    makePopupDraggable(elements.memberPropsPopup);
-    makePopupDraggable(elements.addMemberPopup);
-    makePopupDraggable(elements.nodeLoadPopup);
+    if(elements.memberPropsPopup) makePopupDraggable(elements.memberPropsPopup);
+    if(elements.addMemberPopup) makePopupDraggable(elements.addMemberPopup);
+    if(elements.nodeLoadPopup) makePopupDraggable(elements.nodeLoadPopup);
 
     document.addEventListener('click', (e) => { 
-        if (elements.modeAddMemberBtn.contains(e.target)) return;
-        if(!elements.memberPropsPopup.contains(e.target) && !elements.addMemberPopup.contains(e.target)) { elements.memberPropsPopup.style.display='none'; elements.addMemberPopup.style.display='none'; }
-        if(!elements.nodeLoadPopup.contains(e.target)) elements.nodeLoadPopup.style.display='none';
-        if(!elements.nodeCoordsPopup.contains(e.target)) elements.nodeCoordsPopup.style.display='none';
-        if(!elements.nodeContextMenu.contains(e.target)) elements.nodeContextMenu.style.display='none';
+        if (elements.modeAddMemberBtn && elements.modeAddMemberBtn.contains(e.target)) return;
+        if(elements.memberPropsPopup && elements.addMemberPopup && !elements.memberPropsPopup.contains(e.target) && !elements.addMemberPopup.contains(e.target)) { 
+            if(elements.memberPropsPopup) elements.memberPropsPopup.style.display='none'; 
+            if(elements.addMemberPopup) elements.addMemberPopup.style.display='none'; 
+        }
+        if(elements.nodeLoadPopup && !elements.nodeLoadPopup.contains(e.target)) elements.nodeLoadPopup.style.display='none';
+        if(elements.nodeCoordsPopup && !elements.nodeCoordsPopup.contains(e.target)) elements.nodeCoordsPopup.style.display='none';
+        if(elements.nodeContextMenu && !elements.nodeContextMenu.contains(e.target)) elements.nodeContextMenu.style.display='none';
     });
 
     elements.nodeContextMenu.addEventListener('click', (e) => {

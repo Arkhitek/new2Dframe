@@ -726,8 +726,10 @@ canvas {
     box-shadow: 0 4px 12px rgba(0,0,0,0.15); 
     border-radius: 6px;
     padding: 15px; 
-    z-index: 10000; /* 非常に高いz-indexを設定 */
+    z-index: 99999; /* より高いz-indexを設定 */
     width: 280px;
+    min-width: 280px; /* 最小幅を設定 */
+    min-height: 200px; /* 最小高さを設定 */
     max-width: calc(100vw - 20px); /* 画面幅から最小マージンを引く */
     max-height: calc(100vh - 40px); /* 画面高さから最小マージンを引く */
     overflow-y: auto; /* 内容が多い場合はスクロール */
