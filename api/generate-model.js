@@ -29,7 +29,7 @@ export default async function handler(req, res) {
             throw new Error("Hugging FaceのAPIキーがサーバーに設定されていません。Vercelの管理画面で設定してください。");
         }
         
-        const API_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2";
+        const API_URL = "https://api-inference.huggingface.co/models/google/gemma-7b-it";
         
         // Hugging Face APIに送るための詳しい依頼方法を書いた定型文（システムプロンプト）
         const systemPrompt = createSystemPromptForBackend();
