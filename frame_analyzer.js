@@ -13482,6 +13482,22 @@ function getCurrentModelData() {
     
     // 節点情報を取得
     if (elements.nodesTable && elements.nodesTable.rows) {
+        console.log('🔍 節点テーブル全体情報:', {
+            totalRows: elements.nodesTable.rows.length,
+            headerRow: elements.nodesTable.rows[0]?.cells?.length,
+            firstDataRow: elements.nodesTable.rows[1]?.cells?.length,
+            lastDataRow: elements.nodesTable.rows[elements.nodesTable.rows.length - 1]?.cells?.length
+        });
+        
+        // ヘッダー行の内容を確認
+        if (elements.nodesTable.rows[0]) {
+            const headerCells = [];
+            for (let j = 0; j < Math.min(elements.nodesTable.rows[0].cells.length, 10); j++) {
+                headerCells.push(`col${j}: "${elements.nodesTable.rows[0].cells[j]?.textContent || ''}"`);
+            }
+            console.log('🔍 節点テーブルヘッダー:', headerCells.join(', '));
+        }
+        
         for (let i = 1; i < elements.nodesTable.rows.length; i++) {
             const row = elements.nodesTable.rows[i];
             
@@ -13502,6 +13518,13 @@ function getCurrentModelData() {
                 s: support
             };
             console.log(`🔍 節点 ${i} データ取得:`, nodeData);
+            
+            // 座標が0,0の場合はスキップ（空の行の可能性）
+            if (x === 0 && y === 0) {
+                console.log(`🔍 節点 ${i} は空の行のためスキップします`);
+                continue;
+            }
+            
             nodes.push(nodeData);
         }
     }
@@ -13562,6 +13585,13 @@ function getCurrentModelData() {
                 s: section
             };
             console.log(`🔍 部材 ${i} データ取得:`, memberData);
+            
+            // 開始節点と終了節点が同じ場合はスキップ（無効な部材）
+            if (startNode === endNode) {
+                console.log(`🔍 部材 ${i} は無効な部材（開始節点=終了節点）のためスキップします`);
+                continue;
+            }
+            
             members.push(memberData);
         }
     }
