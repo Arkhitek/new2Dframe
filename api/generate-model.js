@@ -1,48 +1,54 @@
-// 外部と通信するための道具をインポートします
 const fetch = require('node-fetch');
+// ★★★ Google公式の認証ライブラリをインポート ★★★
+const { GoogleAuth } = require('google-auth-library');
 
-// Vercelのサーバーレス関数のエントリーポイント
 export default async function handler(req, res) {
-    // POST以外のリクエストはエラーを返す
     if (req.method !== 'POST') {
-        res.status(405).json({ error: 'Method Not Allowed' });
-        return;
+        return res.status(405).json({ error: 'Method Not Allowed' });
     }
 
     try {
-        // リクエストの中身を取り出します
         const { prompt: userPrompt } = req.body;
         if (!userPrompt) {
-            res.status(400).json({ error: '指示内容が空です。' });
-            return;
+            return res.status(400).json({ error: '指示内容が空です。' });
         }
 
-        // Vercelの環境変数から「Gemini」のAPIキーを取得します
-        const API_KEY = process.env.GEMINI_API_KEY;
-        if (!API_KEY) {
-            throw new Error("Gemini APIキーがサーバーに設定されていません。");
+        // Vercelの環境変数からサービスアカウントのJSON文字列を取得
+        const serviceAccountJsonString = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+        if (!serviceAccountJsonString) {
+            throw new Error("サービスアカウントのJSONがサーバーに設定されていません。");
         }
-        
-        // ★★★ 変更点：APIのURLをGemini API（安定版）に変更 ★★★
-        const API_URL = `https://asia-northeast1-aiplatform.googleapis.com/v1/projects/gen-lang-client-0984077298/locations/asia-northeast1/publishers/google/models/gemini-1.5-flash-latest:generateContent?key=${API_KEY}`;
 
+        // JSON文字列をパースして認証情報オブジェクトを作成
+        const credentials = JSON.parse(serviceAccountJsonString);
         
-        // Gemini APIに送るためのシステムプロンプト
+        // プロジェクトIDを認証情報から取得
+        const projectId = credentials.project_id;
+        if(!projectId) {
+            throw new Error("サービスアカウントJSONにプロジェクトIDが含まれていません。");
+        }
+
+        // ★★★ 認証ライブラリを使って、APIリクエストに必要なアクセストークンを自動生成 ★★★
+        const auth = new GoogleAuth({
+            credentials,
+            scopes: 'https://www.googleapis.com/auth/cloud-platform',
+        });
+        const client = await auth.getClient();
+        const accessToken = (await client.getAccessToken()).token;
+        
+        // ★★★ 東京リージョンを指定したVertex AI APIのエンドポイント ★★★
+        const API_URL = `https://asia-northeast1-aiplatform.googleapis.com/v1/projects/${projectId}/locations/asia-northeast1/publishers/google/models/gemini-1.5-flash-latest:generateContent`;
+        
         const systemPrompt = createSystemPromptForBackend();
-
-        // ★★★ 変更点：リクエストの形式をGemini APIの仕様に変更 ★★★
         const requestBody = {
-            contents: [{ 
-                parts: [{ 
-                    text: `${systemPrompt}\n\nユーザーの指示:\n${userPrompt}` 
-                }] 
-            }]
+            contents: [{ parts: [{ text: `${systemPrompt}\n\nユーザーの指示:\n${userPrompt}` }] }]
         };
 
-        // 仲介役がGemini APIへリクエストを送信します
         const geminiResponse = await fetch(API_URL, {
             method: 'POST',
             headers: { 
+                // ★★★ APIキーの代わりに、生成したアクセストークンを認証ヘッダーに設定 ★★★
+                'Authorization': `Bearer ${accessToken}`,
                 'Content-Type': 'application/json' 
             },
             body: JSON.stringify(requestBody),
@@ -50,13 +56,11 @@ export default async function handler(req, res) {
 
         const data = await geminiResponse.json();
 
-        // Gemini APIからエラーが返ってきた場合の処理
         if (!geminiResponse.ok) {
             console.error('Gemini API Error:', data);
             throw new Error(data.error?.message || 'Gemini APIでエラーが発生しました。');
         }
 
-        // 成功したレスポンスをそのままブラウザに返します
         res.status(200).json(data);
 
     } catch (error) {
@@ -65,7 +69,6 @@ export default async function handler(req, res) {
     }
 }
 
-// createSystemPromptForBackend() 関数は以前のものと全く同じです
 function createSystemPromptForBackend() {
     return `
 あなたは2Dフレーム構造解析モデルを生成する専門のアシスタントです。
