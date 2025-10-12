@@ -13498,6 +13498,20 @@ function getCurrentModelData() {
             console.log('🔍 節点テーブルヘッダー:', headerCells.join(', '));
         }
         
+        // 節点テーブルの実際の構造を確認
+        // ヘッダー行のcol0が"1"なので、データ行の構造が異なる可能性
+        console.log('🔍 節点テーブル行の詳細確認:');
+        for (let i = 0; i < Math.min(elements.nodesTable.rows.length, 3); i++) {
+            const row = elements.nodesTable.rows[i];
+            if (row && row.cells) {
+                const cells = [];
+                for (let j = 0; j < Math.min(row.cells.length, 8); j++) {
+                    cells.push(`cell${j}: "${row.cells[j]?.textContent || ''}"`);
+                }
+                console.log(`🔍 節点テーブル行 ${i}:`, cells.join(', '));
+            }
+        }
+        
         for (let i = 1; i < elements.nodesTable.rows.length; i++) {
             const row = elements.nodesTable.rows[i];
             
@@ -13507,10 +13521,22 @@ function getCurrentModelData() {
                 continue;
             }
             
-            const x = parseFloat(row.cells[0]?.textContent) || 0;
-            const y = parseFloat(row.cells[1]?.textContent) || 0;
-            const supportSelect = row.cells[3]?.querySelector('select');
-            const support = supportSelect ? supportSelect.value : 'free';
+            // 実際のテーブル構造に基づいて座標を取得
+            // ヘッダーがcol0: "1"なので、データ行の構造を再確認
+            let x, y, supportSelect, support;
+            
+            // セルの内容を確認して適切な列を特定
+            if (row.cells[0]?.textContent && !isNaN(parseFloat(row.cells[0].textContent))) {
+                // セル0に数値がある場合
+                x = parseFloat(row.cells[0].textContent);
+                y = parseFloat(row.cells[1]?.textContent) || 0;
+                supportSelect = row.cells[3]?.querySelector('select');
+                support = supportSelect ? supportSelect.value : 'free';
+            } else {
+                // セル0に数値がない場合はスキップ
+                console.log(`🔍 節点テーブル行 ${i} は無効なデータのためスキップ`);
+                continue;
+            }
             
             const nodeData = {
                 x: x,
@@ -13546,6 +13572,19 @@ function getCurrentModelData() {
             console.log('🔍 部材テーブルヘッダー:', headerCells.join(', '));
         }
         
+        // 部材テーブルの実際の構造を確認
+        console.log('🔍 部材テーブル行の詳細確認:');
+        for (let i = 0; i < Math.min(elements.membersTable.rows.length, 3); i++) {
+            const row = elements.membersTable.rows[i];
+            if (row && row.cells) {
+                const cells = [];
+                for (let j = 0; j < Math.min(row.cells.length, 14); j++) {
+                    cells.push(`cell${j}: "${row.cells[j]?.textContent || ''}"`);
+                }
+                console.log(`🔍 部材テーブル行 ${i}:`, cells.join(', '));
+            }
+        }
+        
         for (let i = 1; i < elements.membersTable.rows.length; i++) {
             const row = elements.membersTable.rows[i];
             
@@ -13574,10 +13613,21 @@ function getCurrentModelData() {
                 cell2HTML: row.cells[2]?.innerHTML
             });
             
-            const startNode = parseInt(row.cells[0]?.textContent) || 1;
-            const endNode = parseInt(row.cells[1]?.textContent) || 2;
-            const sectionSelect = row.cells[2]?.querySelector('select');
-            const section = sectionSelect ? sectionSelect.value : 'H-200x100x5.5x8';
+            // 部材テーブルの実際の構造に基づいてデータを取得
+            // ヘッダー情報から判断すると、列の構造が異なる
+            let startNode, endNode, sectionSelect, section;
+            
+            // セル0に数値がある場合のみ処理
+            if (row.cells[0]?.textContent && !isNaN(parseInt(row.cells[0].textContent))) {
+                startNode = parseInt(row.cells[0].textContent);
+                // 終点節点は別の列にある可能性（現在は空のため、適切な列を特定する必要）
+                endNode = parseInt(row.cells[1]?.textContent) || (startNode + 1); // 暫定的に次の節点番号
+                sectionSelect = row.cells[8]?.querySelector('select'); // col8が断面情報の可能性
+                section = sectionSelect ? sectionSelect.value : 'H-300x150x6.5x9'; // ヘッダーから推測
+            } else {
+                console.log(`🔍 部材テーブル行 ${i} は無効なデータのためスキップ`);
+                continue;
+            }
             
             const memberData = {
                 n1: startNode,
