@@ -13325,13 +13325,24 @@ async function generateModelWithAI(userPrompt, mode = 'new') {
         
         // Ensure aiStatus is correctly assigned to the DOM element
         if (aiStatus) {
-            aiStatus.textContent = `❌ エラー: ${error.message}`;
+            // Check if error and error.message exist before accessing
+            if (error && error.message) {
+                aiStatus.textContent = `❌ エラー: ${error.message}`;
+            } else {
+                // Provide a generic error message if error.message is not available
+                aiStatus.textContent = `❌ AIによるモデル生成に失敗しました。`;
+            }
             aiStatus.style.color = '#dc3545';
         } else {
             console.error('Error: Could not find element with id "gemini-status-indicator"');
         }
         
-        alert(`AIによるモデル生成に失敗しました。\nエラー: ${error.message}`);
+        // Check if error.message exists before including it in the alert
+        if (error && error.message) {
+            alert(`AIによるモデル生成に失敗しました。\nエラー: ${error.message}`);
+        } else {
+            alert(`AIによるモデル生成に失敗しました。`);
+        }
     } finally {
         // UIの状態を元に戻します
         if (aiGenerateBtn) {
@@ -13404,9 +13415,16 @@ function getCurrentModelData() {
     if (elements.nodesTable && elements.nodesTable.rows) {
         for (let i = 1; i < elements.nodesTable.rows.length; i++) {
             const row = elements.nodesTable.rows[i];
-            const x = parseFloat(row.cells[0].textContent) || 0;
-            const y = parseFloat(row.cells[1].textContent) || 0;
-            const supportSelect = row.cells[3].querySelector('select');
+            
+            // 行とセルが存在するかチェック
+            if (!row || !row.cells || row.cells.length < 4) {
+                console.warn(`節点テーブルの行 ${i} に必要なセルが不足しています`);
+                continue;
+            }
+            
+            const x = parseFloat(row.cells[0]?.textContent) || 0;
+            const y = parseFloat(row.cells[1]?.textContent) || 0;
+            const supportSelect = row.cells[3]?.querySelector('select');
             const support = supportSelect ? supportSelect.value : 'free';
             
             nodes.push({
@@ -13421,9 +13439,16 @@ function getCurrentModelData() {
     if (elements.membersTable && elements.membersTable.rows) {
         for (let i = 1; i < elements.membersTable.rows.length; i++) {
             const row = elements.membersTable.rows[i];
-            const startNode = parseInt(row.cells[0].textContent) || 1;
-            const endNode = parseInt(row.cells[1].textContent) || 2;
-            const sectionSelect = row.cells[2].querySelector('select');
+            
+            // 行とセルが存在するかチェック
+            if (!row || !row.cells || row.cells.length < 3) {
+                console.warn(`部材テーブルの行 ${i} に必要なセルが不足しています`);
+                continue;
+            }
+            
+            const startNode = parseInt(row.cells[0]?.textContent) || 1;
+            const endNode = parseInt(row.cells[1]?.textContent) || 2;
+            const sectionSelect = row.cells[2]?.querySelector('select');
             const section = sectionSelect ? sectionSelect.value : 'H-200x100x5.5x8';
             
             members.push({
@@ -13438,10 +13463,17 @@ function getCurrentModelData() {
     if (elements.nodeLoadsTable && elements.nodeLoadsTable.rows) {
         for (let i = 1; i < elements.nodeLoadsTable.rows.length; i++) {
             const row = elements.nodeLoadsTable.rows[i];
-            const node = parseInt(row.cells[0].textContent) || 1;
-            const fx = parseFloat(row.cells[1].textContent) || 0;
-            const fy = parseFloat(row.cells[2].textContent) || 0;
-            const mz = parseFloat(row.cells[3].textContent) || 0;
+            
+            // 行とセルが存在するかチェック
+            if (!row || !row.cells || row.cells.length < 4) {
+                console.warn(`節点荷重テーブルの行 ${i} に必要なセルが不足しています`);
+                continue;
+            }
+            
+            const node = parseInt(row.cells[0]?.textContent) || 1;
+            const fx = parseFloat(row.cells[1]?.textContent) || 0;
+            const fy = parseFloat(row.cells[2]?.textContent) || 0;
+            const mz = parseFloat(row.cells[3]?.textContent) || 0;
             
             if (fx !== 0 || fy !== 0 || mz !== 0) {
                 nodeLoads.push({
@@ -13458,10 +13490,17 @@ function getCurrentModelData() {
     if (elements.memberLoadsTable && elements.memberLoadsTable.rows) {
         for (let i = 1; i < elements.memberLoadsTable.rows.length; i++) {
             const row = elements.memberLoadsTable.rows[i];
-            const member = parseInt(row.cells[0].textContent) || 1;
-            const loadType = row.cells[1].textContent.trim();
-            const magnitude = parseFloat(row.cells[2].textContent) || 0;
-            const position = parseFloat(row.cells[3].textContent) || 0;
+            
+            // 行とセルが存在するかチェック
+            if (!row || !row.cells || row.cells.length < 4) {
+                console.warn(`部材荷重テーブルの行 ${i} に必要なセルが不足しています`);
+                continue;
+            }
+            
+            const member = parseInt(row.cells[0]?.textContent) || 1;
+            const loadType = row.cells[1]?.textContent?.trim() || '';
+            const magnitude = parseFloat(row.cells[2]?.textContent) || 0;
+            const position = parseFloat(row.cells[3]?.textContent) || 0;
             
             if (magnitude !== 0) {
                 memberLoads.push({
