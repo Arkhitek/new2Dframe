@@ -3488,10 +3488,28 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     if (newRow && newRow.cells && newRow.cells.length > 4) {
                         // 弾性係数の復元
-                        const eSelect = newRow.cells[3] ? newRow.cells[3].querySelector('select') : null;
-                        if (eSelect) {
-                            eSelect.value = m.E === 'custom' ? 'custom' : m.E;
-                            eSelect.dispatchEvent(new Event('change')); // Trigger update
+                        const eContainer = newRow.cells[2] ? newRow.cells[2].querySelector('div') : null;
+                        if (eContainer) {
+                            const eSelect = eContainer.querySelector('select');
+                            const eInput = eContainer.querySelector('input');
+                            if (eSelect && eInput) {
+                                // E値を適切に設定
+                                const eValue = m.E || '205000';
+                                const materials = { "205000": "スチール", "193000": "ステンレス", "70000": "アルミニウム", "8000": "木材" };
+                                const e_val_str = parseFloat(eValue).toString();
+                                const isPresetMaterial = materials.hasOwnProperty(e_val_str);
+                                
+                                if (isPresetMaterial) {
+                                    eSelect.value = e_val_str;
+                                    eInput.value = e_val_str;
+                                    eInput.readOnly = true;
+                                } else {
+                                    eSelect.value = 'custom';
+                                    eInput.value = eValue;
+                                    eInput.readOnly = false;
+                                }
+                                eSelect.dispatchEvent(new Event('change')); // Trigger update
+                            }
                         }
                         
                         // 降伏強度の復元
@@ -13450,6 +13468,15 @@ function getCurrentModelData() {
             const supportSelect = row.cells[3]?.querySelector('select');
             const support = supportSelect ? supportSelect.value : 'free';
             
+            console.log(`🔍 節点 ${i} データ取得:`, {
+                x: x,
+                y: y,
+                supportSelect: supportSelect,
+                support: support,
+                cell3Exists: !!row.cells[3],
+                cell3HTML: row.cells[3]?.innerHTML
+            });
+            
             nodes.push({
                 x: x,
                 y: y,
@@ -13516,7 +13543,7 @@ function getCurrentModelData() {
             
             // 行とセルが存在するかチェック
             if (!row || !row.cells || row.cells.length < 4) {
-                console.warn(`部材荷重テーブルの行 ${i} に必要なセルが不足しています`);
+                console.warn(`部材荷重テーブルの行 ${i} に必要なセルが不足しています (セル数: ${row?.cells?.length || 0})`);
                 continue;
             }
             
@@ -13643,9 +13670,15 @@ function integrateEditData(newState) {
         return;
     }
     
+    // 既存データの節点に境界条件のデフォルト値を設定
+    const existingNodesWithDefaults = (existingModelData.nodes || []).map(node => ({
+        ...node,
+        s: node.s || 'free' // 境界条件がundefinedの場合は'free'に設定
+    }));
+    
     // 新しいデータを既存データに統合
     const integratedState = {
-        nodes: [...(existingModelData.nodes || []), ...(newState.nodes || [])],
+        nodes: [...existingNodesWithDefaults, ...(newState.nodes || [])],
         members: [...(existingModelData.members || []), ...(newState.members || [])],
         nodeLoads: [...(existingModelData.nodeLoads || []), ...(newState.nodeLoads || [])],
         memberLoads: [...(existingModelData.memberLoads || []), ...(newState.memberLoads || [])]
