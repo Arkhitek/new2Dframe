@@ -13232,6 +13232,16 @@ function extractJsonFromResponse(apiResponse) {
  * @returns {string} 境界条件 ('free', 'pinned', 'fixed', 'roller')
  */
 function parseFoundationCondition(naturalLanguageInput) {
+    // 入力が文字列でない場合は文字列に変換、null/undefined の場合は空文字列
+    if (typeof naturalLanguageInput !== 'string') {
+        naturalLanguageInput = String(naturalLanguageInput || '');
+    }
+    
+    // 空文字列の場合はデフォルト値を返す
+    if (!naturalLanguageInput.trim()) {
+        return 'free'; // 入力がない場合は自由
+    }
+    
     const text = naturalLanguageInput.toLowerCase();
     
     // 柱脚関連のキーワードを検索
