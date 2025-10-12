@@ -13463,6 +13463,7 @@ function extractJsonFromResponse(apiResponse) {
  */
 function getCurrentModelData() {
     console.log('🔍 現在のモデル情報を取得中...');
+    console.log('🔍 新しいデバッグ機能が実行されています - バージョン2');
     
     // Check if elements object exists
     if (!elements) {
@@ -13500,7 +13501,7 @@ function getCurrentModelData() {
         
         // 節点テーブルの実際の構造を確認
         // ヘッダー行のcol0が"1"なので、データ行の構造が異なる可能性
-        console.log('🔍 節点テーブル行の詳細確認:');
+        console.log('🔍 節点テーブル行の詳細確認 - バージョン2:');
         for (let i = 0; i < Math.min(elements.nodesTable.rows.length, 3); i++) {
             const row = elements.nodesTable.rows[i];
             if (row && row.cells) {
@@ -13573,7 +13574,7 @@ function getCurrentModelData() {
         }
         
         // 部材テーブルの実際の構造を確認
-        console.log('🔍 部材テーブル行の詳細確認:');
+        console.log('🔍 部材テーブル行の詳細確認 - バージョン2:');
         for (let i = 0; i < Math.min(elements.membersTable.rows.length, 3); i++) {
             const row = elements.membersTable.rows[i];
             if (row && row.cells) {
