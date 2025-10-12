@@ -13508,6 +13508,12 @@ function getCurrentModelData() {
     
     // 部材情報を取得
     if (elements.membersTable && elements.membersTable.rows) {
+        console.log('🔍 部材テーブル全体情報:', {
+            totalRows: elements.membersTable.rows.length,
+            headerRow: elements.membersTable.rows[0]?.cells?.length,
+            firstDataRow: elements.membersTable.rows[1]?.cells?.length
+        });
+        
         for (let i = 1; i < elements.membersTable.rows.length; i++) {
             const row = elements.membersTable.rows[i];
             
@@ -13516,6 +13522,16 @@ function getCurrentModelData() {
                 console.warn(`部材テーブルの行 ${i} に必要なセルが不足しています`);
                 continue;
             }
+            
+            // テーブル構造の詳細デバッグ
+            console.log(`🔍 部材 ${i} テーブル行構造:`, {
+                rowIndex: i,
+                cellCount: row.cells.length,
+                cell0Content: row.cells[0]?.textContent,
+                cell1Content: row.cells[1]?.textContent,
+                cell2Content: row.cells[2]?.textContent,
+                cell2HTML: row.cells[2]?.innerHTML
+            });
             
             const startNode = parseInt(row.cells[0]?.textContent) || 1;
             const endNode = parseInt(row.cells[1]?.textContent) || 2;
