@@ -3445,6 +3445,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // 境界条件の詳細チェック
                 console.log(`🔍 節点 ${index + 1} 境界条件詳細チェック:`, {
                     support: n.support,
+                    supportStringified: JSON.stringify(n.support),
                     type: typeof n.support,
                     length: n.support ? n.support.length : 'undefined',
                     isFree: n.support === 'free',
@@ -13429,13 +13430,27 @@ function applyGeneratedModel(modelData, naturalLanguageInput = '') {
         
         // AI生成の境界条件値をアプリケーション形式に変換する関数
         const convertSupportCondition = (aiSupport) => {
+            console.log(`🔍 convertSupportCondition 入力:`, {
+                aiSupport: aiSupport,
+                type: typeof aiSupport,
+                stringified: JSON.stringify(aiSupport)
+            });
+            
             const supportMap = {
                 'f': 'free',
                 'p': 'pinned', 
                 'r': 'roller',
                 'x': 'fixed'
             };
-            return supportMap[aiSupport] || aiSupport; // マッピングがない場合はそのまま
+            const result = supportMap[aiSupport] || aiSupport; // マッピングがない場合はそのまま
+            
+            console.log(`🔍 convertSupportCondition 結果:`, {
+                input: aiSupport,
+                output: result,
+                mapped: supportMap[aiSupport] !== undefined
+            });
+            
+            return result;
         };
         
         // APIからのデータを、アプリが理解できる形式に変換
@@ -13453,7 +13468,16 @@ function applyGeneratedModel(modelData, naturalLanguageInput = '') {
                         convertedSupport: originalSupport,
                         newSupport: support,
                         y: n.y,
-                        foundationCondition: foundationCondition
+                        foundationCondition: foundationCondition,
+                        isFoundationNode: isFoundationNode
+                    });
+                } else {
+                    console.log(`🔍 非柱脚節点 ${index + 1}:`, {
+                        aiSupport: n.s,
+                        convertedSupport: originalSupport,
+                        newSupport: support,
+                        y: n.y,
+                        isFoundationNode: isFoundationNode
                     });
                 }
                 
