@@ -3471,14 +3471,40 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             
             // 部材復元
-            state.members.forEach(m => {
+            state.members.forEach((m, index) => {
+                // デバッグログは本番環境では削除
+                // console.log(`🔍 復元中の部材 ${index + 1}:`, { i: m.i, j: m.j, E: m.E, I: m.I, A: m.A, Z: m.Z });
+                
                 try {
-                    const I_m4 = toNumberOrDefault(m.I) * 1e-8;
-                    const A_m2 = toNumberOrDefault(m.A) * 1e-4;
-                    const Z_m3 = toNumberOrDefault(m.Z) * 1e-6;
+                    // 安全な数値変換関数
+                    const safeParseFloat = (value, defaultValue) => {
+                        if (value === undefined || value === null || value === '') {
+                            return defaultValue;
+                        }
+                        const parsed = parseFloat(value);
+                        return isNaN(parsed) ? defaultValue : parsed;
+                    };
+                    
+                    const I_m4 = safeParseFloat(m.I, 1.84e-5) * 1e-8;
+                    const A_m2 = safeParseFloat(m.A, 2.34e-3) * 1e-4;
+                    const Z_m3 = safeParseFloat(m.Z, 1.23e-3) * 1e-6;
+                    
+                    // console.log(`🔍 部材 ${index + 1} 変換後の値:`, { I_m4, A_m2, Z_m3 });
                     
                     // memberRowHTML の戻り値を安全に取得
-                    const memberHTML = memberRowHTML(m.i, m.j, m.E, "235", I_m4, A_m2, Z_m3, m.i_conn, m.j_conn);
+                    const E_value = m.E || '205000';
+                    const i_conn = m.i_conn || 'rigid';
+                    const j_conn = m.j_conn || 'rigid';
+                    const sectionName = m.sectionName || '';
+                    const sectionAxis = m.sectionAxis || '';
+                    
+                    // 節点番号の安全な取得
+                    const i = m.i || m.startNode || 0;
+                    const j = m.j || m.endNode || 1;
+                    
+                    // console.log(`🔍 部材 ${index + 1} memberRowHTML引数:`, { i, j, E: E_value, I: I_m4, A: A_m2, Z: Z_m3 });
+                    
+                    const memberHTML = memberRowHTML(i, j, E_value, "235", I_m4, A_m2, Z_m3, i_conn, j_conn, sectionName, sectionAxis);
                     if (!memberHTML || !Array.isArray(memberHTML)) {
                         console.warn('memberRowHTML returned invalid data:', memberHTML);
                         return;
@@ -3494,7 +3520,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             const eInput = eContainer.querySelector('input');
                             if (eSelect && eInput) {
                                 // E値を適切に設定
-                                const eValue = m.E || '205000';
+                                const eValue = E_value;
                                 const materials = { "205000": "スチール", "193000": "ステンレス", "70000": "アルミニウム", "8000": "木材" };
                                 const e_val_str = parseFloat(eValue).toString();
                                 const isPresetMaterial = materials.hasOwnProperty(e_val_str);
