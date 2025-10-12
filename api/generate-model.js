@@ -1,67 +1,80 @@
+// 外部と通信するための道具をインポートします
 const fetch = require('node-fetch');
-// ★★★ Google公式の認証ライブラリをインポート ★★★
-const { GoogleAuth } = require('google-auth-library');
 
+// Vercelのサーバーレス関数のエントリーポイント
 export default async function handler(req, res) {
     if (req.method !== 'POST') {
-        return res.status(405).json({ error: 'Method Not Allowed' });
+        res.status(405).json({ error: 'Method Not Allowed' });
+        return;
     }
 
     try {
         const { prompt: userPrompt } = req.body;
         if (!userPrompt) {
-            return res.status(400).json({ error: '指示内容が空です。' });
+            res.status(400).json({ error: '指示内容が空です。' });
+            return;
         }
 
-        // Vercelの環境変数からサービスアカウントのJSON文字列を取得
-        const serviceAccountJsonString = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
-        if (!serviceAccountJsonString) {
-            throw new Error("サービスアカウントのJSONがサーバーに設定されていません。");
+        // Vercelの環境変数からMistral AIのAPIキーを取得します
+        const API_KEY = process.env.MISTRAL_API_KEY;
+        if (!API_KEY) {
+            throw new Error("Mistral AIのAPIキーがサーバーに設定されていません。");
         }
-
-        // JSON文字列をパースして認証情報オブジェクトを作成
-        const credentials = JSON.parse(serviceAccountJsonString);
         
-        // プロジェクトIDを認証情報から取得
-        const projectId = credentials.project_id;
-        if(!projectId) {
-            throw new Error("サービスアカウントJSONにプロジェクトIDが含まれていません。");
-        }
-
-        // ★★★ 認証ライブラリを使って、APIリクエストに必要なアクセストークンを自動生成 ★★★
-        const auth = new GoogleAuth({
-            credentials,
-            scopes: 'https://www.googleapis.com/auth/cloud-platform',
-        });
-        const client = await auth.getClient();
-        const accessToken = (await client.getAccessToken()).token;
+        // ★★★ 変更点：APIのURLをMistral AIのエンドポイントに変更 ★★★
+        const API_URL = 'https://api.mistral.ai/v1/chat/completions';
         
-        // ★★★ 東京リージョンを指定したVertex AI APIのエンドポイント ★★★
-        const API_URL = `https://asia-northeast1-aiplatform.googleapis.com/v1/projects/${projectId}/locations/asia-northeast1/publishers/google/models/gemini-1.5-flash-latest:generateContent`;
-        
+        // システムプロンプトは変更なし
         const systemPrompt = createSystemPromptForBackend();
+
+        // ★★★ 変更点：リクエストの形式をMistral AIの仕様に変更 ★★★
         const requestBody = {
-            contents: [{ parts: [{ text: `${systemPrompt}\n\nユーザーの指示:\n${userPrompt}` }] }]
+            model: "mistral-large-latest", // Mistralの高性能モデルを指定
+            messages: [
+                { "role": "system", "content": systemPrompt },
+                { "role": "user", "content": userPrompt }
+            ],
+            // JSONモードを有効にするための設定
+            response_format: { "type": "json_object" }
         };
 
-        const geminiResponse = await fetch(API_URL, {
+        const mistralResponse = await fetch(API_URL, {
             method: 'POST',
             headers: { 
-                // ★★★ APIキーの代わりに、生成したアクセストークンを認証ヘッダーに設定 ★★★
-                'Authorization': `Bearer ${accessToken}`,
+                // ★★★ 変更点：認証ヘッダーを設定 ★★★
+                'Authorization': `Bearer ${API_KEY}`,
                 'Content-Type': 'application/json' 
             },
             body: JSON.stringify(requestBody),
         });
 
-        const data = await geminiResponse.json();
+        const data = await mistralResponse.json();
 
-        if (!geminiResponse.ok) {
-            console.error('Gemini API Error:', data);
-            throw new Error(data.error?.message || 'Gemini APIでエラーが発生しました。');
+        if (!mistralResponse.ok) {
+            console.error('Mistral AI Error:', data);
+            throw new Error(data.message || 'Mistral AIでエラーが発生しました。');
         }
 
-        res.status(200).json(data);
+        // ★★★ 変更点：Mistralからのレスポンス形式に合わせてデータを取得 ★★★
+        if (!data.choices || !data.choices[0] || !data.choices[0].message.content) {
+             throw new Error("Mistral AIから予期しない形式のレスポンスがありました。");
+        }
+        // JSONモードで返されたJSON文字列を取得
+        const generatedText = data.choices[0].message.content;
+
+        // フロントエンドが処理しやすいように、Gemini APIのレスポンス形式に似せて整形します
+        const responseForFrontend = {
+            candidates: [{
+                content: {
+                    parts: [{
+                        text: generatedText
+                    }]
+                }
+            }]
+        };
+
+        // 成功した返事をブラウザに返します
+        res.status(200).json(responseForFrontend);
 
     } catch (error) {
         console.error('サーバーレス関数エラー:', error);
@@ -69,6 +82,7 @@ export default async function handler(req, res) {
     }
 }
 
+// createSystemPromptForBackend() 関数は以前のものと全く同じです
 function createSystemPromptForBackend() {
     return `
 あなたは2Dフレーム構造解析モデルを生成する専門のアシスタントです。
