@@ -13305,7 +13305,7 @@ async function generateModelWithAI(userPrompt) {
         aiStatus.textContent = '✅ モデルデータを適用しています...';
 
         // 取り出したモデルデータを、アプリケーションのテーブルに反映させます
-        applyGeneratedModel(modelData, prompt);
+        applyGeneratedModel(modelData, userPrompt);
 
         alert('AIによるモデル生成が完了しました。');
 
