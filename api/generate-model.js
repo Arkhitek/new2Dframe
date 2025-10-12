@@ -15,33 +15,27 @@ export default async function handler(req, res) {
             return;
         }
 
-        // Vercelの環境変数からMistral AIのAPIキーを取得します
         const API_KEY = process.env.MISTRAL_API_KEY;
         if (!API_KEY) {
             throw new Error("Mistral AIのAPIキーがサーバーに設定されていません。");
         }
         
-        // ★★★ 変更点：APIのURLをMistral AIのエンドポイントに変更 ★★★
         const API_URL = 'https://api.mistral.ai/v1/chat/completions';
         
-        // システムプロンプトは変更なし
         const systemPrompt = createSystemPromptForBackend();
 
-        // ★★★ 変更点：リクエストの形式をMistral AIの仕様に変更 ★★★
         const requestBody = {
-            model: "mistral-large-latest", // Mistralの高性能モデルを指定
+            model: "mistral-large-latest",
             messages: [
                 { "role": "system", "content": systemPrompt },
                 { "role": "user", "content": userPrompt }
             ],
-            // JSONモードを有効にするための設定
             response_format: { "type": "json_object" }
         };
 
         const mistralResponse = await fetch(API_URL, {
             method: 'POST',
             headers: { 
-                // ★★★ 変更点：認証ヘッダーを設定 ★★★
                 'Authorization': `Bearer ${API_KEY}`,
                 'Content-Type': 'application/json' 
             },
@@ -55,14 +49,11 @@ export default async function handler(req, res) {
             throw new Error(data.message || 'Mistral AIでエラーが発生しました。');
         }
 
-        // ★★★ 変更点：Mistralからのレスポンス形式に合わせてデータを取得 ★★★
         if (!data.choices || !data.choices[0] || !data.choices[0].message.content) {
              throw new Error("Mistral AIから予期しない形式のレスポンスがありました。");
         }
-        // JSONモードで返されたJSON文字列を取得
         const generatedText = data.choices[0].message.content;
 
-        // フロントエンドが処理しやすいように、Gemini APIのレスポンス形式に似せて整形します
         const responseForFrontend = {
             candidates: [{
                 content: {
@@ -73,7 +64,6 @@ export default async function handler(req, res) {
             }]
         };
 
-        // 成功した返事をブラウザに返します
         res.status(200).json(responseForFrontend);
 
     } catch (error) {
@@ -82,7 +72,6 @@ export default async function handler(req, res) {
     }
 }
 
-// createSystemPromptForBackend() 関数は以前のものと全く同じです
 function createSystemPromptForBackend() {
     return `
 あなたは2Dフレーム構造解析モデルを生成する専門のアシスタントです。
