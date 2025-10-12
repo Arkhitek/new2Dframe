@@ -13360,6 +13360,11 @@ function extractJsonFromResponse(apiResponse) {
  * @returns {string} 境界条件 ('free', 'pinned', 'fixed', 'roller')
  */
 function parseFoundationCondition(naturalLanguageInput) {
+    console.log(`🔍 parseFoundationCondition 開始:`, {
+        input: naturalLanguageInput,
+        type: typeof naturalLanguageInput
+    });
+    
     // 入力が文字列でない場合は文字列に変換、null/undefined の場合は空文字列
     if (typeof naturalLanguageInput !== 'string') {
         naturalLanguageInput = String(naturalLanguageInput || '');
@@ -13367,31 +13372,46 @@ function parseFoundationCondition(naturalLanguageInput) {
     
     // 空文字列の場合はデフォルト値を返す
     if (!naturalLanguageInput.trim()) {
+        console.log('🔍 入力が空文字列のため free を返す');
         return 'free'; // 入力がない場合は自由
     }
     
     const text = naturalLanguageInput.toLowerCase();
+    console.log(`🔍 小文字変換後: "${text}"`);
     
     // 柱脚関連のキーワードを検索
     const foundationKeywords = ['柱脚', '基礎', '支点', '固定', 'ピン', 'ローラー', '自由'];
     const hasFoundationMention = foundationKeywords.some(keyword => text.includes(keyword));
     
+    console.log(`🔍 柱脚関連キーワード検索:`, {
+        keywords: foundationKeywords,
+        hasFoundationMention: hasFoundationMention
+    });
+    
     if (!hasFoundationMention) {
+        console.log('🔍 柱脚関連キーワードが見つからないため free を返す');
         return 'free'; // デフォルトは自由
     }
     
     // 境界条件のキーワードを検索
+    console.log('🔍 境界条件キーワード検索開始');
+    
     if (text.includes('固定') || text.includes('剛')) {
+        console.log('🔍 "固定" または "剛" が見つかったため fixed を返す');
         return 'fixed';
     } else if (text.includes('ピン') || text.includes('ヒンジ')) {
+        console.log('🔍 "ピン" または "ヒンジ" が見つかったため pinned を返す');
         return 'pinned';
     } else if (text.includes('ローラー') || text.includes('ローラ')) {
+        console.log('🔍 "ローラー" または "ローラ" が見つかったため roller を返す');
         return 'roller';
     } else if (text.includes('自由')) {
+        console.log('🔍 "自由" が見つかったため free を返す');
         return 'free';
     }
     
     // デフォルトは固定（一般的な柱脚の条件）
+    console.log('🔍 境界条件キーワードが見つからないためデフォルトで fixed を返す');
     return 'fixed';
 }
 
@@ -13420,6 +13440,7 @@ function applyGeneratedModel(modelData, naturalLanguageInput = '') {
         window.elements.memberLoadsTable.innerHTML = '';
         
         // 柱脚の境界条件を解析
+        console.log(`🔍 自然言語入力: "${naturalLanguageInput}"`);
         const foundationCondition = parseFoundationCondition(naturalLanguageInput);
         console.log('🔍 柱脚境界条件解析結果:', {
             naturalLanguageInput: naturalLanguageInput,
