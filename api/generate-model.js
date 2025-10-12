@@ -9,7 +9,7 @@ export default async function handler(req, res) {
     }
 
     try {
-        const { prompt: userPrompt } = req.body;
+        const { prompt: userPrompt, mode = 'new', currentModel } = req.body;
         if (!userPrompt) {
             res.status(400).json({ error: '指示内容が空です。' });
             return;
@@ -22,13 +22,19 @@ export default async function handler(req, res) {
         
         const API_URL = 'https://api.mistral.ai/v1/chat/completions';
         
-        const systemPrompt = createSystemPromptForBackend();
+        const systemPrompt = createSystemPromptForBackend(mode, currentModel);
+        
+        // 追加編集モードの場合は現在のモデル情報を含めてプロンプトを作成
+        let userMessage = userPrompt;
+        if (mode === 'edit' && currentModel) {
+            userMessage = createEditPrompt(userPrompt, currentModel);
+        }
 
         const requestBody = {
             model: "mistral-large-latest",
             messages: [
                 { "role": "system", "content": systemPrompt },
-                { "role": "user", "content": userPrompt }
+                { "role": "user", "content": userMessage }
             ],
             response_format: { "type": "json_object" }
         };
@@ -72,10 +78,21 @@ export default async function handler(req, res) {
     }
 }
 
-function createSystemPromptForBackend() {
-    return `
-あなたは2Dフレーム構造解析モデルを生成する専門のアシスタントです。
-ユーザーからの自然言語による指示に基づいて、以下のJSON形式で構造モデルデータを出力してください。
+function createSystemPromptForBackend(mode = 'new', currentModel = null) {
+    let prompt = `
+あなたは2Dフレーム構造解析モデルを生成する専門のアシスタントです。`;
+
+    if (mode === 'edit') {
+        prompt += `
+現在のモデル情報を基に、ユーザーの編集指示に従ってモデルを更新してください。
+既存の構造を保持しつつ、指示された変更のみを適用してください。`;
+    } else {
+        prompt += `
+ユーザーからの自然言語による指示に基づいて、新しい構造モデルを作成してください。`;
+    }
+
+    prompt += `
+以下のJSON形式で構造モデルデータを出力してください。
 JSONデータのみを出力し、前後の説明やマークダウンの\`\`\`json ... \`\`\`は含めないでください。
 
 **JSONデータ構造の例:**
@@ -132,4 +149,69 @@ JSONデータのみを出力し、前後の説明やマークダウンの\`\`\`j
   - 柱脚に関する明示的な指示がない場合でも、一般的な構造では柱脚は固定とするのが合理的です。特に「門型ラーメン」「フレーム」「ラーメン構造」などの記述がある場合は、Y座標=0の節点を "x" (固定) に設定してください。
 - ユーザーの指示に曖昧な点がある場合は、最も一般的で合理的な構造を仮定してモデルを作成してください。
 `;
+
+    if (mode === 'edit' && currentModel) {
+        prompt += `
+
+**現在のモデル情報:**
+節点数: ${currentModel.nodes ? currentModel.nodes.length : 0}
+部材数: ${currentModel.members ? currentModel.members.length : 0}
+節点荷重数: ${currentModel.nodeLoads ? currentModel.nodeLoads.length : 0}
+部材荷重数: ${currentModel.memberLoads ? currentModel.memberLoads.length : 0}
+
+編集時は以下の点に注意してください:
+- 既存の節点番号と部材番号の連続性を保持してください
+- 既存の構造の基本形状は維持し、指示された変更のみを適用してください
+- 新しく追加する節点や部材は、既存の番号の続きから開始してください
+- 削除する場合は、後続の番号を詰める必要はありません
+`;
+    }
+
+    return prompt;
+}
+
+function createEditPrompt(userPrompt, currentModel) {
+    let editPrompt = `編集指示: ${userPrompt}\n\n`;
+    
+    if (currentModel && currentModel.nodes && currentModel.nodes.length > 0) {
+        editPrompt += `現在の節点情報:\n`;
+        currentModel.nodes.forEach((node, index) => {
+            const supportText = {
+                'free': '自由',
+                'pinned': 'ピン', 
+                'fixed': '固定',
+                'roller': 'ローラー'
+            }[node.s] || node.s;
+            editPrompt += `節点${index + 1}: (${node.x}, ${node.y}) - ${supportText}\n`;
+        });
+        editPrompt += `\n`;
+    }
+    
+    if (currentModel && currentModel.members && currentModel.members.length > 0) {
+        editPrompt += `現在の部材情報:\n`;
+        currentModel.members.forEach((member, index) => {
+            editPrompt += `部材${index + 1}: 節点${member.n1} → 節点${member.n2} (${member.s})\n`;
+        });
+        editPrompt += `\n`;
+    }
+    
+    if (currentModel && currentModel.nodeLoads && currentModel.nodeLoads.length > 0) {
+        editPrompt += `現在の節点荷重:\n`;
+        currentModel.nodeLoads.forEach((load, index) => {
+            editPrompt += `節点${load.n}: Fx=${load.fx}, Fy=${load.fy}, Mz=${load.mz}\n`;
+        });
+        editPrompt += `\n`;
+    }
+    
+    if (currentModel && currentModel.memberLoads && currentModel.memberLoads.length > 0) {
+        editPrompt += `現在の部材荷重:\n`;
+        currentModel.memberLoads.forEach((load, index) => {
+            editPrompt += `部材${load.m}: ${load.type} ${load.magnitude} (位置:${load.position})\n`;
+        });
+        editPrompt += `\n`;
+    }
+    
+    editPrompt += `上記の現在のモデルに対して、指示された編集を適用してください。`;
+    
+    return editPrompt;
 }

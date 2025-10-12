@@ -1621,19 +1621,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Make elements object globally accessible
     window.elements = elements;
 
-    // AIモデル生成ボタンのイベントリスナー
-    const aiGenerateBtn = document.getElementById('generate-model-btn');
-    if (aiGenerateBtn) {
-        aiGenerateBtn.addEventListener('click', () => {
-            const promptInput = document.getElementById('natural-language-input');
-            const userPrompt = promptInput.value.trim();
-            if (userPrompt) {
-                generateModelWithAI(userPrompt);
-            } else {
-                alert('指示内容を入力してください。');
-            }
-        });
-    }
+    // AIモデル生成のイベントリスナー設定
+    setupAIModelGenerationListeners();
 
     // デバッグ: エクセル出力ボタンの存在確認
     console.log('エクセル出力ボタンの要素:', elements.exportExcelBtn);
@@ -13259,7 +13248,7 @@ document.addEventListener('DOMContentLoaded', () => {
  * Gemini APIを使用して自然言語からモデルを生成するメイン関数
  * @param {string} userPrompt ユーザーが入力した指示
  */
-async function generateModelWithAI(userPrompt) {
+async function generateModelWithAI(userPrompt, mode = 'new') {
     const aiGenerateBtn = document.getElementById('generate-model-btn');
     const aiStatus = document.getElementById('gemini-status-indicator');
 
@@ -13271,14 +13260,23 @@ async function generateModelWithAI(userPrompt) {
     // UIを「生成中」の状態にします
     aiGenerateBtn.disabled = true;
     aiStatus.style.display = 'block';
-    aiStatus.textContent = '🧠 AIがモデルを生成中です...';
+    aiStatus.textContent = mode === 'edit' ? '🧠 AIがモデルを編集中です...' : '🧠 AIがモデルを生成中です...';
     aiStatus.style.color = '#005A9C';
 
     try {
+        // 現在のモデル情報を取得（追加編集モードの場合）
+        let currentModelData = null;
+        if (mode === 'edit') {
+            currentModelData = getCurrentModelData();
+            console.log('🔍 追加編集モード: 現在のモデル情報を取得しました', currentModelData);
+        }
+
         // ★★★ 変更点 ★★★
         // 仲介役に送るリクエストを作成します。秘密の鍵(APIキー)は含めません。
         const requestBody = {
-            prompt: userPrompt
+            prompt: userPrompt,
+            mode: mode,
+            currentModel: currentModelData
         };
 
         // 我々の仲介役プログラムにリクエストを送信します
@@ -13305,9 +13303,9 @@ async function generateModelWithAI(userPrompt) {
         aiStatus.textContent = '✅ モデルデータを適用しています...';
 
         // 取り出したモデルデータを、アプリケーションのテーブルに反映させます
-        applyGeneratedModel(modelData, userPrompt);
+        applyGeneratedModel(modelData, userPrompt, mode);
 
-        alert('AIによるモデル生成が完了しました。');
+        alert(mode === 'edit' ? 'AIによるモデル編集が完了しました。' : 'AIによるモデル生成が完了しました。');
 
     } catch (error) {
         console.error('AIモデル生成エラー:', error);
@@ -13352,6 +13350,239 @@ function extractJsonFromResponse(apiResponse) {
     }
     
     return text.substring(startIndex, endIndex + 1);
+}
+
+/**
+ * 現在のモデル情報を取得する関数
+ * @returns {Object} 現在のモデルデータ
+ */
+function getCurrentModelData() {
+    console.log('🔍 現在のモデル情報を取得中...');
+    
+    const nodes = [];
+    const members = [];
+    const nodeLoads = [];
+    const memberLoads = [];
+    
+    // 節点情報を取得
+    if (elements.nodesTable && elements.nodesTable.rows) {
+        for (let i = 1; i < elements.nodesTable.rows.length; i++) {
+            const row = elements.nodesTable.rows[i];
+            const x = parseFloat(row.cells[0].textContent) || 0;
+            const y = parseFloat(row.cells[1].textContent) || 0;
+            const supportSelect = row.cells[3].querySelector('select');
+            const support = supportSelect ? supportSelect.value : 'free';
+            
+            nodes.push({
+                x: x,
+                y: y,
+                s: support
+            });
+        }
+    }
+    
+    // 部材情報を取得
+    if (elements.membersTable && elements.membersTable.rows) {
+        for (let i = 1; i < elements.membersTable.rows.length; i++) {
+            const row = elements.membersTable.rows[i];
+            const startNode = parseInt(row.cells[0].textContent) || 1;
+            const endNode = parseInt(row.cells[1].textContent) || 2;
+            const sectionSelect = row.cells[2].querySelector('select');
+            const section = sectionSelect ? sectionSelect.value : 'H-200x100x5.5x8';
+            
+            members.push({
+                n1: startNode,
+                n2: endNode,
+                s: section
+            });
+        }
+    }
+    
+    // 節点荷重情報を取得
+    if (elements.nodeLoadsTable && elements.nodeLoadsTable.rows) {
+        for (let i = 1; i < elements.nodeLoadsTable.rows.length; i++) {
+            const row = elements.nodeLoadsTable.rows[i];
+            const node = parseInt(row.cells[0].textContent) || 1;
+            const fx = parseFloat(row.cells[1].textContent) || 0;
+            const fy = parseFloat(row.cells[2].textContent) || 0;
+            const mz = parseFloat(row.cells[3].textContent) || 0;
+            
+            if (fx !== 0 || fy !== 0 || mz !== 0) {
+                nodeLoads.push({
+                    n: node,
+                    fx: fx,
+                    fy: fy,
+                    mz: mz
+                });
+            }
+        }
+    }
+    
+    // 部材荷重情報を取得
+    if (elements.memberLoadsTable && elements.memberLoadsTable.rows) {
+        for (let i = 1; i < elements.memberLoadsTable.rows.length; i++) {
+            const row = elements.memberLoadsTable.rows[i];
+            const member = parseInt(row.cells[0].textContent) || 1;
+            const loadType = row.cells[1].textContent.trim();
+            const magnitude = parseFloat(row.cells[2].textContent) || 0;
+            const position = parseFloat(row.cells[3].textContent) || 0;
+            
+            if (magnitude !== 0) {
+                memberLoads.push({
+                    m: member,
+                    type: loadType,
+                    magnitude: magnitude,
+                    position: position
+                });
+            }
+        }
+    }
+    
+    const modelData = {
+        nodes: nodes,
+        members: members,
+        nodeLoads: nodeLoads,
+        memberLoads: memberLoads
+    };
+    
+    console.log('🔍 取得した現在のモデル情報:', modelData);
+    return modelData;
+}
+
+/**
+ * AIモデル生成のイベントリスナーを設定する関数
+ */
+function setupAIModelGenerationListeners() {
+    console.log('🔍 AIモデル生成のイベントリスナーを設定中...');
+    
+    // AIモデル生成ボタンのイベントリスナー
+    const aiGenerateBtn = document.getElementById('generate-model-btn');
+    if (aiGenerateBtn) {
+        aiGenerateBtn.addEventListener('click', () => {
+            const promptInput = document.getElementById('natural-language-input');
+            const userPrompt = promptInput.value.trim();
+            const modeRadios = document.getElementsByName('ai-generation-mode');
+            const selectedMode = Array.from(modeRadios).find(radio => radio.checked)?.value || 'new';
+            
+            if (userPrompt) {
+                console.log(`🔍 AI生成モード: ${selectedMode}, 指示: "${userPrompt}"`);
+                generateModelWithAI(userPrompt, selectedMode);
+            } else {
+                alert('指示内容を入力してください。');
+            }
+        });
+    }
+    
+    // 現在のモデル確認ボタンのイベントリスナー
+    const previewBtn = document.getElementById('preview-current-model-btn');
+    if (previewBtn) {
+        previewBtn.addEventListener('click', () => {
+            previewCurrentModel();
+        });
+    }
+    
+    // モード切り替えのイベントリスナー
+    const modeRadios = document.getElementsByName('ai-generation-mode');
+    Array.from(modeRadios).forEach(radio => {
+        radio.addEventListener('change', updateModeDescription);
+    });
+    
+    // 初期状態を設定
+    updateModeDescription();
+    
+    console.log('✅ AIモデル生成のイベントリスナー設定完了');
+}
+
+/**
+ * モード説明文を更新する関数
+ */
+function updateModeDescription() {
+    const modeRadios = document.getElementsByName('ai-generation-mode');
+    const selectedMode = Array.from(modeRadios).find(radio => radio.checked)?.value || 'new';
+    const descriptionElement = document.getElementById('mode-description');
+    const previewBtn = document.getElementById('preview-current-model-btn');
+    
+    if (selectedMode === 'new') {
+        descriptionElement.textContent = '作成したい構造モデルを自然言語で入力してください。(例: 高さ5m、スパン10mの門型ラーメン。柱脚は固定。)';
+        if (previewBtn) previewBtn.style.display = 'none';
+    } else if (selectedMode === 'edit') {
+        descriptionElement.textContent = '現在のモデルに対して追加・編集したい内容を自然言語で入力してください。(例: 2階部分を追加、梁の断面をH-300x150に変更)';
+        if (previewBtn) previewBtn.style.display = 'inline-block';
+    }
+}
+
+/**
+ * 追加編集データを既存データに統合する関数
+ * @param {Object} newState AIが生成した新しいデータ
+ */
+function integrateEditData(newState) {
+    console.log('🔍 データ統合開始:', newState);
+    
+    // 既存のデータを取得
+    const existingModelData = getCurrentModelData();
+    console.log('🔍 既存データ:', existingModelData);
+    
+    // 新しいデータを既存データに統合
+    const integratedState = {
+        nodes: [...existingModelData.nodes, ...newState.nodes],
+        members: [...existingModelData.members, ...newState.members],
+        nodeLoads: [...existingModelData.nodeLoads, ...newState.nodeLoads],
+        memberLoads: [...existingModelData.memberLoads, ...newState.memberLoads]
+    };
+    
+    console.log('🔍 統合後のデータ:', integratedState);
+    
+    // 統合されたデータでテーブルを更新
+    window.restoreState(integratedState);
+}
+
+/**
+ * 現在のモデル情報を表示する関数
+ */
+function previewCurrentModel() {
+    const modelData = getCurrentModelData();
+    
+    let previewText = "=== 現在のモデル情報 ===\n\n";
+    
+    previewText += `節点数: ${modelData.nodes.length}\n`;
+    if (modelData.nodes.length > 0) {
+        previewText += "節点:\n";
+        modelData.nodes.forEach((node, index) => {
+            const supportText = {
+                'free': '自由',
+                'pinned': 'ピン',
+                'fixed': '固定',
+                'roller': 'ローラー'
+            }[node.s] || node.s;
+            previewText += `  ${index + 1}: (${node.x}, ${node.y}) - ${supportText}\n`;
+        });
+    }
+    
+    previewText += `\n部材数: ${modelData.members.length}\n`;
+    if (modelData.members.length > 0) {
+        previewText += "部材:\n";
+        modelData.members.forEach((member, index) => {
+            previewText += `  ${index + 1}: 節点${member.n1} → 節点${member.n2} (${member.s})\n`;
+        });
+    }
+    
+    previewText += `\n節点荷重数: ${modelData.nodeLoads.length}\n`;
+    if (modelData.nodeLoads.length > 0) {
+        previewText += "節点荷重:\n";
+        modelData.nodeLoads.forEach((load, index) => {
+            previewText += `  ${index + 1}: 節点${load.n} - Fx:${load.fx}, Fy:${load.fy}, Mz:${load.mz}\n`;
+        });
+    }
+    
+    previewText += `\n部材荷重数: ${modelData.memberLoads.length}\n`;
+    if (modelData.memberLoads.length > 0) {
+        previewText += "部材荷重:\n";
+        modelData.memberLoads.forEach((load, index) => {
+            previewText += `  ${index + 1}: 部材${load.m} - ${load.type} ${load.magnitude} (位置:${load.position})\n`;
+        });
+    }
+    
+    alert(previewText);
 }
 
 /**
@@ -13419,13 +13650,18 @@ function parseFoundationCondition(naturalLanguageInput) {
  * 生成されたモデルデータをアプリケーションに適用する関数
  * @param {object} modelData APIから受け取ったモデルデータ
  * @param {string} naturalLanguageInput 元の自然言語入力（柱脚条件解析用）
+ * @param {string} mode 生成モード ('new' または 'edit')
  */
-function applyGeneratedModel(modelData, naturalLanguageInput = '') {
+function applyGeneratedModel(modelData, naturalLanguageInput = '', mode = 'new') {
     if (!modelData || !modelData.nodes) {
         throw new Error('生成されたモデルデータが無効です。');
     }
 
-    if (confirm('AIが生成したモデルを適用します。現在のモデルデータはクリアされますが、よろしいですか？')) {
+    const confirmMessage = mode === 'edit' 
+        ? 'AIが編集したモデルを適用します。現在のモデルデータが更新されますが、よろしいですか？'
+        : 'AIが生成したモデルを適用します。現在のモデルデータはクリアされますが、よろしいですか？';
+
+    if (confirm(confirmMessage)) {
         // 既存の`restoreState`関数を再利用して、データをテーブルに反映します
         
         // 適用中の再描画などを一時的に抑制するためのフラグ
@@ -13433,11 +13669,17 @@ function applyGeneratedModel(modelData, naturalLanguageInput = '') {
         
         window.pushState(); // 現在の状態を「元に戻す」ために保存
         
-        // 全てのテーブルをクリア
-        window.elements.nodesTable.innerHTML = '';
-        window.elements.membersTable.innerHTML = '';
-        window.elements.nodeLoadsTable.innerHTML = '';
-        window.elements.memberLoadsTable.innerHTML = '';
+        // 新規作成モードの場合のみ全てのテーブルをクリア
+        if (mode === 'new') {
+            console.log('🔍 新規作成モード: 既存データをクリアします');
+            window.elements.nodesTable.innerHTML = '';
+            window.elements.membersTable.innerHTML = '';
+            window.elements.nodeLoadsTable.innerHTML = '';
+            window.elements.memberLoadsTable.innerHTML = '';
+        } else if (mode === 'edit') {
+            console.log('🔍 追加編集モード: 既存データを保持します');
+            // 既存データは保持し、AIが返したデータで統合・更新する
+        }
         
         // 柱脚の境界条件を解析
         console.log(`🔍 自然言語入力: "${naturalLanguageInput}"`);
@@ -13544,7 +13786,15 @@ function applyGeneratedModel(modelData, naturalLanguageInput = '') {
         
         // データをテーブルに流し込み
         console.log('🔍 復元前のstate確認:', state);
-        window.restoreState(state);
+        
+        if (mode === 'edit') {
+            // 追加編集モード: 既存データと新しいデータを統合
+            console.log('🔍 追加編集モード: データを統合します');
+            integrateEditData(state);
+        } else {
+            // 新規作成モード: 通常の復元処理
+            window.restoreState(state);
+        }
         
         window.isLoadingPreset = false;
 
