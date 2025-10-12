@@ -13526,6 +13526,23 @@ function getCurrentModelData() {
             // ヘッダーがcol0: "1"なので、データ行の構造を再確認
             let x, y, supportSelect, support;
             
+            // 実際のテーブル構造を理解するための詳細デバッグ
+            console.log(`🔍 節点テーブル行 ${i} の全セル詳細:`);
+            for (let j = 0; j < Math.min(row.cells.length, 8); j++) {
+                const cell = row.cells[j];
+                const hasInput = cell?.querySelector('input');
+                const hasSelect = cell?.querySelector('select');
+                const textContent = cell?.textContent || '';
+                const innerHTML = cell?.innerHTML || '';
+                console.log(`  cell${j}: text="${textContent}" input=${!!hasInput} select=${!!hasSelect}`);
+                if (hasInput) {
+                    console.log(`    input value: ${hasInput.value}`);
+                }
+                if (hasSelect) {
+                    console.log(`    select value: ${hasSelect.value}`);
+                }
+            }
+            
             // セルの内容を確認して適切な列を特定
             if (row.cells[0]?.textContent && !isNaN(parseFloat(row.cells[0].textContent))) {
                 // セル0に数値がある場合
@@ -13617,6 +13634,22 @@ function getCurrentModelData() {
             // 部材テーブルの実際の構造に基づいてデータを取得
             // ヘッダー情報から判断すると、列の構造が異なる
             let startNode, endNode, sectionSelect, section;
+            
+            // 実際のテーブル構造を理解するための詳細デバッグ
+            console.log(`🔍 部材テーブル行 ${i} の全セル詳細:`);
+            for (let j = 0; j < Math.min(row.cells.length, 14); j++) {
+                const cell = row.cells[j];
+                const hasInput = cell?.querySelector('input');
+                const hasSelect = cell?.querySelector('select');
+                const textContent = cell?.textContent || '';
+                console.log(`  cell${j}: text="${textContent}" input=${!!hasInput} select=${!!hasSelect}`);
+                if (hasInput) {
+                    console.log(`    input value: ${hasInput.value}`);
+                }
+                if (hasSelect) {
+                    console.log(`    select value: ${hasSelect.value}`);
+                }
+            }
             
             // セル0に数値がある場合のみ処理
             if (row.cells[0]?.textContent && !isNaN(parseInt(row.cells[0].textContent))) {
