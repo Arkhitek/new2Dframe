@@ -3464,6 +3464,11 @@ document.addEventListener('DOMContentLoaded', () => {
     
     elements.undoBtn.onclick = () => { if (historyStack.length > 0) { const lastState = historyStack.pop(); if(lastState) restoreState(lastState); } };
     
+    // Make state management functions globally accessible
+    window.pushState = pushState;
+    window.restoreState = restoreState;
+    window.getCurrentState = getCurrentState;
+    
     /**
      * テーブル行の基本構造を作成
      * @param {HTMLTableSectionElement} tableBody - 対象のテーブルボディ
@@ -13218,7 +13223,7 @@ function applyGeneratedModel(modelData) {
         // 適用中の再描画などを一時的に抑制するためのフラグ
         window.isLoadingPreset = true; 
         
-        pushState(); // 現在の状態を「元に戻す」ために保存
+        window.pushState(); // 現在の状態を「元に戻す」ために保存
         
         // 全てのテーブルをクリア
         elements.nodesTable.innerHTML = '';
@@ -13251,7 +13256,7 @@ function applyGeneratedModel(modelData) {
         };
         
         // データをテーブルに流し込み
-        restoreState(state);
+        window.restoreState(state);
         
         window.isLoadingPreset = false;
 
