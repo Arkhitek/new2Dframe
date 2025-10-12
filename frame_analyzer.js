@@ -1626,9 +1626,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (aiGenerateBtn) {
         aiGenerateBtn.addEventListener('click', () => {
             const promptInput = document.getElementById('natural-language-input');
-            const prompt = promptInput.value.trim();
-            if (prompt) {
-                generateModelWithAI(prompt);
+            const userPrompt = promptInput.value.trim();
+            if (userPrompt) {
+                generateModelWithAI(userPrompt);
             } else {
                 alert('指示内容を入力してください。');
             }
