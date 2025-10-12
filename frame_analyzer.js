@@ -3442,17 +3442,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     isFixed: n.support === 'fixed',
                     isRoller: n.support === 'roller'
                 });
-                console.log(`🔍 節点 ${index + 1} 境界条件値: "${n.support}"`);
+                // 境界条件のデフォルト値を設定
+                const support = n.support || 'free';
+                console.log(`🔍 節点 ${index + 1} 境界条件値: "${support}"`);
                 
                 // select要素のHTMLをログ出力
-                const selectHTML = `<select><option value="free"${n.support==='free'?' selected':''}>自由</option><option value="pinned"${n.support==='pinned'?' selected':''}>ピン</option><option value="fixed"${n.support==='fixed'?' selected':''}>固定</option><option value="roller"${n.support==='roller'?' selected':''}>ローラー</option></select>`;
+                const selectHTML = `<select><option value="free"${support==='free'?' selected':''}>自由</option><option value="pinned"${support==='pinned'?' selected':''}>ピン</option><option value="fixed"${support==='fixed'?' selected':''}>固定</option><option value="roller"${support==='roller'?' selected':''}>ローラー</option></select>`;
                 console.log(`🔍 節点 ${index + 1} のselect要素HTML:`, selectHTML);
                 
                 addRow(elements.nodesTable, [
                     `#`, 
                     `<input type="number" value="${n.x}">`, 
                     `<input type="number" value="${n.y}">`, 
-                    `<select><option value="free"${n.support==='free'?' selected':''}>自由</option><option value="pinned"${n.support==='pinned'?' selected':''}>ピン</option><option value="fixed"${n.support==='fixed'?' selected':''}>固定</option><option value="roller"${n.support==='roller'?' selected':''}>ローラー</option></select>`, 
+                    `<select><option value="free"${support==='free'?' selected':''}>自由</option><option value="pinned"${support==='pinned'?' selected':''}>ピン</option><option value="fixed"${support==='fixed'?' selected':''}>固定</option><option value="roller"${support==='roller'?' selected':''}>ローラー</option></select>`, 
                     `<input type="number" value="${n.dx_forced || 0}" step="0.1">`, 
                     `<input type="number" value="${n.dy_forced || 0}" step="0.1">`, 
                     `<input type="number" value="${n.r_forced || 0}" step="0.001">`
@@ -3624,13 +3626,24 @@ document.addEventListener('DOMContentLoaded', () => {
         const strengthCell = row.cells[4];
         
         const handleMaterialChange = () => {
-            const selectedOption = eSelect.options[eSelect.selectedIndex];
-            let materialType = 'steel';
+            if (!eSelect || !eSelect.options || eSelect.selectedIndex < 0) {
+                console.warn('部材の材料選択要素が無効です');
+                return;
+            }
             
-            if (selectedOption.textContent.includes('木材')) materialType = 'wood';
-            else if (selectedOption.textContent.includes('コンクリート')) materialType = 'concrete';
-            else if (selectedOption.textContent.includes('ステンレス')) materialType = 'stainless';
-            else if (selectedOption.textContent.includes('アルミニウム')) materialType = 'aluminum';
+            const selectedOption = eSelect.options[eSelect.selectedIndex];
+            if (!selectedOption) {
+                console.warn('部材の材料選択オプションが見つかりません');
+                return;
+            }
+            
+            let materialType = 'steel';
+            const optionText = selectedOption.textContent || '';
+            
+            if (optionText.includes('木材')) materialType = 'wood';
+            else if (optionText.includes('コンクリート')) materialType = 'concrete';
+            else if (optionText.includes('ステンレス')) materialType = 'stainless';
+            else if (optionText.includes('アルミニウム')) materialType = 'aluminum';
             
             strengthCell.innerHTML = '';
             strengthCell.appendChild(createStrengthInputHTML(materialType, `member-strength-${row.rowIndex}`));
@@ -4244,12 +4257,22 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // 弾性係数選択欄から材料名を直接取得
             const getMaterialNameFromSelect = (selectElement) => {
+                if (!selectElement || !selectElement.options || selectElement.selectedIndex < 0) {
+                    console.warn('部材の材料選択要素が無効です');
+                    return '不明な材料';
+                }
+                
                 const selectedOption = selectElement.options[selectElement.selectedIndex];
+                if (!selectedOption) {
+                    console.warn('部材の材料選択オプションが見つかりません');
+                    return '不明な材料';
+                }
+                
                 if (selectedOption.value === 'custom') {
                     const eValue = parseFloat(e_input?.value || 0);
                     return `任意材料(E=${(eValue/1000).toLocaleString()}GPa)`;
                 }
-                return selectedOption.textContent; // "スチール", "ステンレス", "アルミニウム", "木材" など
+                return selectedOption.textContent || '不明な材料'; // "スチール", "ステンレス", "アルミニウム", "木材" など
             };
             const material = getMaterialNameFromSelect(e_select);
             
@@ -13828,7 +13851,7 @@ function applyGeneratedModel(modelData, naturalLanguageInput = '', mode = 'new')
                 // Y座標が0の節点（地面に接する節点）の境界条件を自然言語の指示に従って設定
                 const isFoundationNode = Math.abs(n.y) < 0.01; // Y座標が0に近い節点
                 const originalSupport = convertSupportCondition(n.s);
-                const support = isFoundationNode ? foundationCondition : originalSupport;
+                const support = isFoundationNode ? foundationCondition : (originalSupport || 'free');
                 
                 console.log(`🔍 節点 ${index + 1} 境界条件決定:`, {
                     y: n.y,
