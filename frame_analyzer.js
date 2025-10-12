@@ -13546,10 +13546,21 @@ function getCurrentModelData() {
             // セルの内容を確認して適切な列を特定
             if (row.cells[0]?.textContent && !isNaN(parseFloat(row.cells[0].textContent))) {
                 // セル0に数値がある場合
-                x = parseFloat(row.cells[0].textContent);
-                y = parseFloat(row.cells[1]?.textContent) || 0;
+                const nodeNumber = parseFloat(row.cells[0].textContent);
+                
+                // X座標はcell1のinput要素から取得
+                const xInput = row.cells[1]?.querySelector('input');
+                x = xInput ? parseFloat(xInput.value) : 0;
+                
+                // Y座標はcell2のinput要素から取得
+                const yInput = row.cells[2]?.querySelector('input');
+                y = yInput ? parseFloat(yInput.value) : 0;
+                
+                // 境界条件はcell3のselect要素から取得
                 supportSelect = row.cells[3]?.querySelector('select');
                 support = supportSelect ? supportSelect.value : 'free';
+                
+                console.log(`🔍 節点 ${nodeNumber} の座標: (${x}, ${y}), 境界条件: ${support}`);
             } else {
                 // セル0に数値がない場合はスキップ
                 console.log(`🔍 節点テーブル行 ${i} は無効なデータのためスキップ`);
@@ -13653,11 +13664,20 @@ function getCurrentModelData() {
             
             // セル0に数値がある場合のみ処理
             if (row.cells[0]?.textContent && !isNaN(parseInt(row.cells[0].textContent))) {
-                startNode = parseInt(row.cells[0].textContent);
-                // 終点節点は別の列にある可能性（現在は空のため、適切な列を特定する必要）
-                endNode = parseInt(row.cells[1]?.textContent) || (startNode + 1); // 暫定的に次の節点番号
-                sectionSelect = row.cells[8]?.querySelector('select'); // col8が断面情報の可能性
-                section = sectionSelect ? sectionSelect.value : 'H-300x150x6.5x9'; // ヘッダーから推測
+                const memberNumber = parseInt(row.cells[0].textContent);
+                
+                // 開始節点はcell1のinput要素から取得
+                const startNodeInput = row.cells[1]?.querySelector('input');
+                startNode = startNodeInput ? parseInt(startNodeInput.value) : 0;
+                
+                // 終点節点はcell2のinput要素から取得
+                const endNodeInput = row.cells[2]?.querySelector('input');
+                endNode = endNodeInput ? parseInt(endNodeInput.value) : 0;
+                
+                // 断面情報はcell8のtextContentから取得
+                section = row.cells[8]?.textContent || 'H-300x150x6.5x9';
+                
+                console.log(`🔍 部材 ${memberNumber}: 節点 ${startNode} → ${endNode}, 断面: ${section}`);
             } else {
                 console.log(`🔍 部材テーブル行 ${i} は無効なデータのためスキップ`);
                 continue;
