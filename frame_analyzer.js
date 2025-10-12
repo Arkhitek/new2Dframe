@@ -13425,6 +13425,7 @@ function applyGeneratedModel(modelData, naturalLanguageInput = '') {
             naturalLanguageInput: naturalLanguageInput,
             foundationCondition: foundationCondition
         });
+        console.log(`🔍 柱脚境界条件値: "${foundationCondition}"`);
         
         // AIが生成した元のデータをログ出力
         console.log('🔍 AI生成データ:', modelData);
@@ -13463,6 +13464,14 @@ function applyGeneratedModel(modelData, naturalLanguageInput = '') {
                 const isFoundationNode = Math.abs(n.y) < 0.01; // Y座標が0に近い節点
                 const originalSupport = convertSupportCondition(n.s);
                 const support = isFoundationNode ? foundationCondition : originalSupport;
+                
+                console.log(`🔍 節点 ${index + 1} 境界条件決定:`, {
+                    y: n.y,
+                    isFoundationNode: isFoundationNode,
+                    originalSupport: originalSupport,
+                    foundationCondition: foundationCondition,
+                    finalSupport: support
+                });
                 
                 // 柱脚節点の詳細ログ
                 if (isFoundationNode) {
@@ -13513,6 +13522,7 @@ function applyGeneratedModel(modelData, naturalLanguageInput = '') {
         };
         
         // データをテーブルに流し込み
+        console.log('🔍 復元前のstate確認:', state);
         window.restoreState(state);
         
         window.isLoadingPreset = false;
