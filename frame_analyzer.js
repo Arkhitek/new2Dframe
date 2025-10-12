@@ -1618,6 +1618,9 @@ document.addEventListener('DOMContentLoaded', () => {
         considerSelfWeightCheckbox: document.getElementById('consider-self-weight-checkbox'),
     };
 
+    // Make elements object globally accessible
+    window.elements = elements;
+
     // AIモデル生成ボタンのイベントリスナー
     const aiGenerateBtn = document.getElementById('generate-model-btn');
     if (aiGenerateBtn) {
@@ -13226,10 +13229,10 @@ function applyGeneratedModel(modelData) {
         window.pushState(); // 現在の状態を「元に戻す」ために保存
         
         // 全てのテーブルをクリア
-        elements.nodesTable.innerHTML = '';
-        elements.membersTable.innerHTML = '';
-        elements.nodeLoadsTable.innerHTML = '';
-        elements.memberLoadsTable.innerHTML = '';
+        window.elements.nodesTable.innerHTML = '';
+        window.elements.membersTable.innerHTML = '';
+        window.elements.nodeLoadsTable.innerHTML = '';
+        window.elements.memberLoadsTable.innerHTML = '';
         
         // APIからのデータを、アプリが理解できる形式に変換
         const state = {
