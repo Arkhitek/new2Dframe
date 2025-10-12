@@ -13496,14 +13496,13 @@ function getCurrentModelData() {
             const supportSelect = row.cells[3]?.querySelector('select');
             const support = supportSelect ? supportSelect.value : 'free';
             
-            // デバッグログは本番環境では削除
-            // console.log(`🔍 節点 ${i} データ取得:`, { x, y, support, cell3Exists: !!row.cells[3] });
-            
-            nodes.push({
+            const nodeData = {
                 x: x,
                 y: y,
                 s: support
-            });
+            };
+            console.log(`🔍 節点 ${i} データ取得:`, nodeData);
+            nodes.push(nodeData);
         }
     }
     
@@ -13523,11 +13522,13 @@ function getCurrentModelData() {
             const sectionSelect = row.cells[2]?.querySelector('select');
             const section = sectionSelect ? sectionSelect.value : 'H-200x100x5.5x8';
             
-            members.push({
+            const memberData = {
                 n1: startNode,
                 n2: endNode,
                 s: section
-            });
+            };
+            console.log(`🔍 部材 ${i} データ取得:`, memberData);
+            members.push(memberData);
         }
     }
     
@@ -13538,7 +13539,11 @@ function getCurrentModelData() {
             
             // 行とセルが存在するかチェック
             if (!row || !row.cells || row.cells.length < 4) {
-                console.warn(`節点荷重テーブルの行 ${i} に必要なセルが不足しています`);
+                // 空の行は警告を出さずにスキップ
+                if (row && row.cells && row.cells.length > 0) {
+                    // セルが存在するが数が不足している場合のみ警告
+                    console.warn(`節点荷重テーブルの行 ${i} に必要なセルが不足しています (セル数: ${row.cells.length})`);
+                }
                 continue;
             }
             
@@ -13546,6 +13551,11 @@ function getCurrentModelData() {
             const fx = parseFloat(row.cells[1]?.textContent) || 0;
             const fy = parseFloat(row.cells[2]?.textContent) || 0;
             const mz = parseFloat(row.cells[3]?.textContent) || 0;
+            
+            // 空の行（全ての荷重が0）はスキップ
+            if (fx === 0 && fy === 0 && mz === 0) {
+                continue;
+            }
             
             if (fx !== 0 || fy !== 0 || mz !== 0) {
                 nodeLoads.push({
@@ -13565,7 +13575,11 @@ function getCurrentModelData() {
             
             // 行とセルが存在するかチェック
             if (!row || !row.cells || row.cells.length < 4) {
-                console.warn(`部材荷重テーブルの行 ${i} に必要なセルが不足しています (セル数: ${row?.cells?.length || 0})`);
+                // 空の行は警告を出さずにスキップ
+                if (row && row.cells && row.cells.length > 0) {
+                    // セルが存在するが数が不足している場合のみ警告
+                    console.warn(`部材荷重テーブルの行 ${i} に必要なセルが不足しています (セル数: ${row.cells.length})`);
+                }
                 continue;
             }
             
@@ -13573,6 +13587,11 @@ function getCurrentModelData() {
             const loadType = row.cells[1]?.textContent?.trim() || '';
             const magnitude = parseFloat(row.cells[2]?.textContent) || 0;
             const position = parseFloat(row.cells[3]?.textContent) || 0;
+            
+            // 空の行（magnitudeが0または空）はスキップ
+            if (magnitude === 0 || loadType === '') {
+                continue;
+            }
             
             if (magnitude !== 0) {
                 memberLoads.push({
@@ -13593,6 +13612,11 @@ function getCurrentModelData() {
     };
     
     console.log('🔍 取得した現在のモデル情報:', modelData);
+    console.log('🔍 節点データ詳細:', modelData.nodes);
+    console.log('🔍 部材データ詳細:', modelData.members);
+    console.log('🔍 節点荷重データ詳細:', modelData.nodeLoads);
+    console.log('🔍 部材荷重データ詳細:', modelData.memberLoads);
+    
     return modelData;
 }
 
@@ -13725,6 +13749,9 @@ function integrateEditData(newState) {
  */
 function previewCurrentModel() {
     const modelData = getCurrentModelData();
+    
+    // デバッグ用: 取得したデータを確認
+    console.log('🔍 プレビュー用に取得したモデルデータ:', modelData);
     
     let previewText = "=== 現在のモデル情報 ===\n\n";
     
