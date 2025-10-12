@@ -24,7 +24,7 @@ export default async function handler(req, res) {
         }
         
         // ★★★ 変更点：APIのURLをGemini API（安定版）に変更 ★★★
-        const API_URL = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash-latest:generateContent?key=${API_KEY}`;
+        const API_URL = `https://asia-northeast1-aiplatform.googleapis.com/v1/projects/gen-lang-client-0984077298/locations/asia-northeast1/publishers/google/models/gemini-1.5-flash-latest:generateContent?key=${API_KEY}`;
 
         
         // Gemini APIに送るためのシステムプロンプト
