@@ -1653,6 +1653,10 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     let panZoomState = { scale: 1, offsetX: 0, offsetY: 0, isInitialized: false };
+    
+    // Make panZoomState globally accessible
+    window.panZoomState = panZoomState;
+    
     let lastResults = null;
     let lastAnalysisResult = null;
     let lastSectionCheckResults = null;
@@ -13276,7 +13280,7 @@ function applyGeneratedModel(modelData) {
 
         // 表示を更新
         window.updateSelfWeightDisplay();
-        panZoomState.isInitialized = false; 
+        window.panZoomState.isInitialized = false; 
         
         // 再描画と再計算
         window.drawOnCanvas();
