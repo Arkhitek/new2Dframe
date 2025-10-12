@@ -3453,6 +3453,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     isFixed: n.support === 'fixed',
                     isRoller: n.support === 'roller'
                 });
+                console.log(`🔍 節点 ${index + 1} 境界条件値: "${n.support}"`);
                 
                 // select要素のHTMLをログ出力
                 const selectHTML = `<select><option value="free"${n.support==='free'?' selected':''}>自由</option><option value="pinned"${n.support==='pinned'?' selected':''}>ピン</option><option value="fixed"${n.support==='fixed'?' selected':''}>固定</option><option value="roller"${n.support==='roller'?' selected':''}>ローラー</option></select>`;
@@ -13435,6 +13436,7 @@ function applyGeneratedModel(modelData, naturalLanguageInput = '') {
                 type: typeof aiSupport,
                 stringified: JSON.stringify(aiSupport)
             });
+            console.log(`🔍 convertSupportCondition 入力値: "${aiSupport}"`);
             
             const supportMap = {
                 'f': 'free',
@@ -13449,6 +13451,7 @@ function applyGeneratedModel(modelData, naturalLanguageInput = '') {
                 output: result,
                 mapped: supportMap[aiSupport] !== undefined
             });
+            console.log(`🔍 convertSupportCondition 出力値: "${result}"`);
             
             return result;
         };
