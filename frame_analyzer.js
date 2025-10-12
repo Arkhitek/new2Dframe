@@ -3431,7 +3431,27 @@ document.addEventListener('DOMContentLoaded', () => {
             elements.memberLoadsTable.innerHTML = '';
             
             // 節点復元
-            state.nodes.forEach(n => addRow(elements.nodesTable, [`#`, `<input type="number" value="${n.x}">`, `<input type="number" value="${n.y}">`, `<select><option value="free"${n.support==='free'?' selected':''}>自由</option><option value="pinned"${n.support==='pinned'?' selected':''}>ピン</option><option value="fixed"${n.support==='fixed'?' selected':''}>固定</option><option value="roller"${n.support==='roller'?' selected':''}>ローラー</option></select>`, `<input type="number" value="${n.dx_forced || 0}" step="0.1">`, `<input type="number" value="${n.dy_forced || 0}" step="0.1">`, `<input type="number" value="${n.r_forced || 0}" step="0.001">`], false));
+            state.nodes.forEach((n, index) => {
+                // 節点データのログ出力
+                console.log(`🔍 復元中の節点 ${index + 1}:`, {
+                    x: n.x,
+                    y: n.y,
+                    support: n.support,
+                    dx_forced: n.dx_forced,
+                    dy_forced: n.dy_forced,
+                    r_forced: n.r_forced
+                });
+                
+                addRow(elements.nodesTable, [
+                    `#`, 
+                    `<input type="number" value="${n.x}">`, 
+                    `<input type="number" value="${n.y}">`, 
+                    `<select><option value="free"${n.support==='free'?' selected':''}>自由</option><option value="pinned"${n.support==='pinned'?' selected':''}>ピン</option><option value="fixed"${n.support==='fixed'?' selected':''}>固定</option><option value="roller"${n.support==='roller'?' selected':''}>ローラー</option></select>`, 
+                    `<input type="number" value="${n.dx_forced || 0}" step="0.1">`, 
+                    `<input type="number" value="${n.dy_forced || 0}" step="0.1">`, 
+                    `<input type="number" value="${n.r_forced || 0}" step="0.001">`
+                ], false);
+            });
             
             // 部材復元
             state.members.forEach(m => {
@@ -13375,13 +13395,43 @@ function applyGeneratedModel(modelData, naturalLanguageInput = '') {
         
         // 柱脚の境界条件を解析
         const foundationCondition = parseFoundationCondition(naturalLanguageInput);
+        console.log('🔍 柱脚境界条件解析結果:', {
+            naturalLanguageInput: naturalLanguageInput,
+            foundationCondition: foundationCondition
+        });
+        
+        // AIが生成した元のデータをログ出力
+        console.log('🔍 AI生成データ:', modelData);
+        
+        // AI生成の境界条件値をアプリケーション形式に変換する関数
+        const convertSupportCondition = (aiSupport) => {
+            const supportMap = {
+                'f': 'free',
+                'p': 'pinned', 
+                'r': 'roller',
+                'x': 'fixed'
+            };
+            return supportMap[aiSupport] || aiSupport; // マッピングがない場合はそのまま
+        };
         
         // APIからのデータを、アプリが理解できる形式に変換
         const state = {
-            nodes: modelData.nodes.map(n => {
+            nodes: modelData.nodes.map((n, index) => {
                 // Y座標が0の節点（地面に接する節点）の境界条件を自然言語の指示に従って設定
                 const isFoundationNode = Math.abs(n.y) < 0.01; // Y座標が0に近い節点
-                const support = isFoundationNode ? foundationCondition : n.s;
+                const originalSupport = convertSupportCondition(n.s);
+                const support = isFoundationNode ? foundationCondition : originalSupport;
+                
+                // 柱脚節点の詳細ログ
+                if (isFoundationNode) {
+                    console.log(`🔍 柱脚節点 ${index + 1}:`, {
+                        aiSupport: n.s,
+                        convertedSupport: originalSupport,
+                        newSupport: support,
+                        y: n.y,
+                        foundationCondition: foundationCondition
+                    });
+                }
                 
                 return { 
                     x: n.x, 
