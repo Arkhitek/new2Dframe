@@ -13177,7 +13177,7 @@ async function generateModelWithAI(userPrompt) {
         aiStatus.textContent = '✅ モデルデータを適用しています...';
 
         // 取り出したモデルデータを、アプリケーションのテーブルに反映させます
-        applyGeneratedModel(modelData);
+        applyGeneratedModel(modelData, prompt);
 
         alert('AIによるモデル生成が完了しました。');
 
@@ -13227,10 +13227,42 @@ function extractJsonFromResponse(apiResponse) {
 }
 
 /**
+ * 自然言語から柱脚の境界条件を解析する関数
+ * @param {string} naturalLanguageInput 自然言語の入力テキスト
+ * @returns {string} 境界条件 ('free', 'pinned', 'fixed', 'roller')
+ */
+function parseFoundationCondition(naturalLanguageInput) {
+    const text = naturalLanguageInput.toLowerCase();
+    
+    // 柱脚関連のキーワードを検索
+    const foundationKeywords = ['柱脚', '基礎', '支点', '固定', 'ピン', 'ローラー', '自由'];
+    const hasFoundationMention = foundationKeywords.some(keyword => text.includes(keyword));
+    
+    if (!hasFoundationMention) {
+        return 'free'; // デフォルトは自由
+    }
+    
+    // 境界条件のキーワードを検索
+    if (text.includes('固定') || text.includes('剛')) {
+        return 'fixed';
+    } else if (text.includes('ピン') || text.includes('ヒンジ')) {
+        return 'pinned';
+    } else if (text.includes('ローラー') || text.includes('ローラ')) {
+        return 'roller';
+    } else if (text.includes('自由')) {
+        return 'free';
+    }
+    
+    // デフォルトは固定（一般的な柱脚の条件）
+    return 'fixed';
+}
+
+/**
  * 生成されたモデルデータをアプリケーションに適用する関数
  * @param {object} modelData APIから受け取ったモデルデータ
+ * @param {string} naturalLanguageInput 元の自然言語入力（柱脚条件解析用）
  */
-function applyGeneratedModel(modelData) {
+function applyGeneratedModel(modelData, naturalLanguageInput = '') {
     if (!modelData || !modelData.nodes) {
         throw new Error('生成されたモデルデータが無効です。');
     }
@@ -13249,11 +13281,25 @@ function applyGeneratedModel(modelData) {
         window.elements.nodeLoadsTable.innerHTML = '';
         window.elements.memberLoadsTable.innerHTML = '';
         
+        // 柱脚の境界条件を解析
+        const foundationCondition = parseFoundationCondition(naturalLanguageInput);
+        
         // APIからのデータを、アプリが理解できる形式に変換
         const state = {
-            nodes: modelData.nodes.map(n => ({ 
-                x: n.x, y: n.y, support: n.s, dx_forced: 0, dy_forced: 0, r_forced: 0 
-            })),
+            nodes: modelData.nodes.map(n => {
+                // Y座標が0の節点（地面に接する節点）の境界条件を自然言語の指示に従って設定
+                const isFoundationNode = Math.abs(n.y) < 0.01; // Y座標が0に近い節点
+                const support = isFoundationNode ? foundationCondition : n.s;
+                
+                return { 
+                    x: n.x, 
+                    y: n.y, 
+                    support: support, 
+                    dx_forced: 0, 
+                    dy_forced: 0, 
+                    r_forced: 0 
+                };
+            }),
             members: modelData.members.map(m => ({
                 i: m.i, j: m.j,
                 E: m.E || '205000',
