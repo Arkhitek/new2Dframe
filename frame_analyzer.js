@@ -4454,7 +4454,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const ix = parseFloat(row.dataset.ix) * 1e-2 || Math.sqrt(I / A), iy = parseFloat(row.dataset.iy) * 1e-2 || ix;
             if (isNaN(E) || isNaN(I) || isNaN(A) || isNaN(Z)) throw new Error(`部材 ${index + 1} の物性値が無効です。`);
             if (i < 0 || j < 0 || i >= nodes.length || j >= nodes.length) throw new Error(`部材 ${index + 1} の節点番号が不正です。`);
-            const ni = nodes[i], nj = nodes[j], dx = nj.x - ni.x, dy = nj.y - ni.y, L = Math.sqrt(dx**2 + dy**2);
+            const ni = nodes[i], nj = nodes[j];
+            if (!ni || !nj) throw new Error(`部材 ${index + 1} の節点データが無効です (i=${i}, j=${j})。`);
+            const dx = nj.x - ni.x, dy = nj.y - ni.y, L = Math.sqrt(dx**2 + dy**2);
             if(L === 0) throw new Error(`部材 ${index+1} の長さが0です。`);
             const c = dx/L, s = dy/L, T = [ [c,s,0,0,0,0], [-s,c,0,0,0,0], [0,0,1,0,0,0], [0,0,0,c,s,0], [0,0,0,-s,c,0], [0,0,0,0,0,1] ];
             const EAL=E*A/L, EIL=E*I/L, EIL2=E*I/L**2, EIL3=E*I/L**3;
@@ -13468,14 +13470,8 @@ function getCurrentModelData() {
             const supportSelect = row.cells[3]?.querySelector('select');
             const support = supportSelect ? supportSelect.value : 'free';
             
-            console.log(`🔍 節点 ${i} データ取得:`, {
-                x: x,
-                y: y,
-                supportSelect: supportSelect,
-                support: support,
-                cell3Exists: !!row.cells[3],
-                cell3HTML: row.cells[3]?.innerHTML
-            });
+            // デバッグログは本番環境では削除
+            // console.log(`🔍 節点 ${i} データ取得:`, { x, y, support, cell3Exists: !!row.cells[3] });
             
             nodes.push({
                 x: x,
@@ -13672,8 +13668,12 @@ function integrateEditData(newState) {
     
     // 既存データの節点に境界条件のデフォルト値を設定
     const existingNodesWithDefaults = (existingModelData.nodes || []).map(node => ({
-        ...node,
-        s: node.s || 'free' // 境界条件がundefinedの場合は'free'に設定
+        x: node.x || 0,
+        y: node.y || 0,
+        support: node.s || 'free', // sプロパティをsupportプロパティに変換
+        dx_forced: node.dx_forced || 0,
+        dy_forced: node.dy_forced || 0,
+        r_forced: node.r_forced || 0
     }));
     
     // 新しいデータを既存データに統合
