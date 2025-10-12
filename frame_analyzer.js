@@ -3203,7 +3203,67 @@ document.addEventListener('DOMContentLoaded', () => {
     window.applyBulkNodeEdit = applyBulkNodeEdit;
     
     // --- Matrix Math Library ---
-    const mat = { create: (rows, cols, value = 0) => Array(rows).fill().map(() => Array(cols).fill(value)), multiply: (A, B) => { const C = mat.create(A.length, B[0].length); for (let i = 0; i < A.length; i++) { for (let j = 0; j < B[0].length; j++) { for (let k = 0; k < A[0].length; k++) { C[i][j] += A[i][k] * B[k][j]; } } } return C; }, transpose: A => A[0].map((_, colIndex) => A.map(row => row[colIndex])), add: (A, B) => A.map((row, i) => row.map((val, j) => val + B[i][j])), subtract: (A, B) => A.map((row, i) => row.map((val, j) => val - B[i][j])), solve: (A, b) => { const n = A.length; const aug = A.map((row, i) => [...row, b[i][0]]); for (let i = 0; i < n; i++) { let maxRow = i; for (let k = i + 1; k < n; k++) { if (Math.abs(aug[k][i]) > Math.abs(aug[maxRow][i])) maxRow = k; } [aug[i], aug[maxRow]] = [aug[maxRow], aug[i]]; if (aug[i][i] === 0) continue; for (let k = i + 1; k < n; k++) { const factor = aug[k][i] / aug[i][i]; for (let j = i; j < n + 1; j++) aug[k][j] -= factor * aug[i][j]; } } const x = mat.create(n, 1); for (let i = n - 1; i >= 0; i--) { let sum = 0; for (let j = i + 1; j < n; j++) sum += aug[i][j] * x[j][0]; if (aug[i][i] === 0 && aug[i][n] - sum !== 0) return null; x[i][0] = aug[i][i] === 0 ? 0 : (aug[i][n] - sum) / aug[i][i]; } return x; } };
+    const mat = {
+        create: (rows, cols, value = 0) => Array(rows).fill().map(() => Array(cols).fill(value)),
+        
+        multiply: (A, B) => {
+            // undefinedチェックを追加
+            if (!A || !B || !A.length || !B[0] || !B[0].length) {
+                console.error('Matrix multiply: Invalid matrices', { A, B });
+                return null;
+            }
+            const C = mat.create(A.length, B[0].length);
+            for (let i = 0; i < A.length; i++) {
+                for (let j = 0; j < B[0].length; j++) {
+                    for (let k = 0; k < A[0].length; k++) {
+                        C[i][j] += A[i][k] * B[k][j];
+                    }
+                }
+            }
+            return C;
+        },
+        
+        transpose: (A) => {
+            if (!A || !A[0]) return null;
+            return A[0].map((_, colIndex) => A.map(row => row[colIndex]));
+        },
+        
+        add: (A, B) => {
+            if (!A || !B || A.length !== B.length) return null;
+            return A.map((row, i) => row.map((val, j) => val + B[i][j]));
+        },
+        
+        subtract: (A, B) => {
+            if (!A || !B || A.length !== B.length) return null;
+            return A.map((row, i) => row.map((val, j) => val - B[i][j]));
+        },
+        
+        solve: (A, b) => {
+            if (!A || !b || !A.length) return null;
+            const n = A.length;
+            const aug = A.map((row, i) => [...row, b[i][0]]);
+            for (let i = 0; i < n; i++) {
+                let maxRow = i;
+                for (let k = i + 1; k < n; k++) {
+                    if (Math.abs(aug[k][i]) > Math.abs(aug[maxRow][i])) maxRow = k;
+                }
+                [aug[i], aug[maxRow]] = [aug[maxRow], aug[i]];
+                if (aug[i][i] === 0) continue;
+                for (let k = i + 1; k < n; k++) {
+                    const factor = aug[k][i] / aug[i][i];
+                    for (let j = i; j < n + 1; j++) aug[k][j] -= factor * aug[i][j];
+                }
+            }
+            const x = mat.create(n, 1);
+            for (let i = n - 1; i >= 0; i--) {
+                let sum = 0;
+                for (let j = i + 1; j < n; j++) sum += aug[i][j] * x[j][0];
+                if (aug[i][i] === 0 && aug[i][n] - sum !== 0) return null;
+                x[i][0] = aug[i][i] === 0 ? 0 : (aug[i][n] - sum) / aug[i][i];
+            }
+            return x;
+        }
+    };
     
     // --- State and History Management ---
     const getCurrentState = () => {
@@ -3918,7 +3978,16 @@ document.addEventListener('DOMContentLoaded', () => {
             combinedNodeLoads.forEach(load => { const i = load.nodeIndex * 3; F_global[i][0] += load.px; F_global[i+1][0] += load.py; F_global[i+2][0] += load.mz; });
             members.forEach((member) => {
                 const {k_local, T, i, j} = member;
-                const T_t = mat.transpose(T), k_global_member = mat.multiply(mat.multiply(T_t, k_local), T);
+                const T_t = mat.transpose(T);
+                if (!T_t) {
+                    console.error('Matrix transpose failed for member:', member);
+                    return;
+                }
+                const k_global_member = mat.multiply(mat.multiply(T_t, k_local), T);
+                if (!k_global_member) {
+                    console.error('Matrix multiply failed for member:', member);
+                    return;
+                }
                 const indices = [i*3, i*3+1, i*3+2, j*3, j*3+1, j*3+2];
                 for (let row = 0; row < 6; row++) for (let col = 0; col < 6; col++) K_global[indices[row]][indices[col]] += k_global_member[row][col];
             });
@@ -3966,12 +4035,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (free_indices.length === 0) { // 完全拘束モデルの場合
                 const D_global = D_s;
-                const R = mat.subtract(mat.multiply(K_global, D_global), F_global);
+                const K_D = mat.multiply(K_global, D_global);
+                if (!K_D) {
+                    console.error('Matrix multiply failed: K_global * D_global');
+                    return;
+                }
+                const R = mat.subtract(K_D, F_global);
                 const memberForces = members.map((member, idx) => {
                     const { T, k_local, i, j } = member;
                     const d_global_member = [ ...D_global.slice(i * 3, i * 3 + 3), ...D_global.slice(j * 3, j * 3 + 3) ];
                     const d_local = mat.multiply(T, d_global_member);
+                    if (!d_local) {
+                        console.error('Matrix multiply failed: T * d_global_member for member', idx);
+                        return { N_i: 0, Q_i: 0, M_i: 0, N_j: 0, Q_j: 0, M_j: 0 };
+                    }
                     let f_local = mat.multiply(k_local, d_local);
+                    if (!f_local) {
+                        console.error('Matrix multiply failed: k_local * d_local for member', idx);
+                        return { N_i: 0, Q_i: 0, M_i: 0, N_j: 0, Q_j: 0, M_j: 0 };
+                    }
                     if(fixedEndForces[idx]) { const fel_mat = fixedEndForces[idx].map(v=>[v]); f_local = mat.add(f_local, fel_mat); }
                     return { N_i: f_local[0][0], Q_i: f_local[1][0], M_i: f_local[2][0], N_j: f_local[3][0], Q_j: f_local[4][0], M_j: f_local[5][0] };
                 });
@@ -13338,8 +13420,19 @@ function applyGeneratedModel(modelData, naturalLanguageInput = '') {
         window.updateSelfWeightDisplay();
         window.panZoomState.isInitialized = false; 
         
+        // データが正しく設定されているか確認
+        console.log('AI生成後のデータ確認:');
+        console.log('節点数:', window.elements.nodesTable.rows.length);
+        console.log('部材数:', window.elements.membersTable.rows.length);
+        
         // 再描画と再計算
         window.drawOnCanvas();
-        window.runFullAnalysis();
+        
+        // データが存在する場合のみ解析を実行
+        if (window.elements.nodesTable.rows.length > 0 && window.elements.membersTable.rows.length > 0) {
+            window.runFullAnalysis();
+        } else {
+            console.warn('AI生成後のデータが不完全です。解析をスキップします。');
+        }
     }
 }
