@@ -3442,6 +3442,21 @@ document.addEventListener('DOMContentLoaded', () => {
                     r_forced: n.r_forced
                 });
                 
+                // 境界条件の詳細チェック
+                console.log(`🔍 節点 ${index + 1} 境界条件詳細チェック:`, {
+                    support: n.support,
+                    type: typeof n.support,
+                    length: n.support ? n.support.length : 'undefined',
+                    isFree: n.support === 'free',
+                    isPinned: n.support === 'pinned', 
+                    isFixed: n.support === 'fixed',
+                    isRoller: n.support === 'roller'
+                });
+                
+                // select要素のHTMLをログ出力
+                const selectHTML = `<select><option value="free"${n.support==='free'?' selected':''}>自由</option><option value="pinned"${n.support==='pinned'?' selected':''}>ピン</option><option value="fixed"${n.support==='fixed'?' selected':''}>固定</option><option value="roller"${n.support==='roller'?' selected':''}>ローラー</option></select>`;
+                console.log(`🔍 節点 ${index + 1} のselect要素HTML:`, selectHTML);
+                
                 addRow(elements.nodesTable, [
                     `#`, 
                     `<input type="number" value="${n.x}">`, 
@@ -3451,6 +3466,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     `<input type="number" value="${n.dy_forced || 0}" step="0.1">`, 
                     `<input type="number" value="${n.r_forced || 0}" step="0.001">`
                 ], false);
+                
+                // 作成されたselect要素の実際の値を確認
+                const lastRow = elements.nodesTable.rows[elements.nodesTable.rows.length - 1];
+                if (lastRow && lastRow.cells[3]) {
+                    const selectElement = lastRow.cells[3].querySelector('select');
+                    if (selectElement) {
+                        console.log(`🔍 節点 ${index + 1} の実際のselect値:`, selectElement.value);
+                    }
+                }
             });
             
             // 部材復元
