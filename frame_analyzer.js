@@ -13252,6 +13252,19 @@ async function generateModelWithAI(userPrompt, mode = 'new') {
     const aiGenerateBtn = document.getElementById('generate-model-btn');
     const aiStatus = document.getElementById('gemini-status-indicator');
 
+    // Check if required elements exist
+    if (!aiGenerateBtn) {
+        console.error('Error: Could not find element with id "generate-model-btn"');
+        alert('AI生成ボタンが見つかりません。ページを再読み込みしてください。');
+        return;
+    }
+    
+    if (!aiStatus) {
+        console.error('Error: Could not find element with id "gemini-status-indicator"');
+        alert('AIステータス表示要素が見つかりません。ページを再読み込みしてください。');
+        return;
+    }
+
     // ★★★ 変更点 ★★★
     // 宛先をGoogleから、我々が作った仲介役プログラムの住所に変更します。
     // netlify.tomlの設定により、このURLへのアクセスは自動的にサーバーレス関数に転送されます。
@@ -13309,19 +13322,31 @@ async function generateModelWithAI(userPrompt, mode = 'new') {
 
     } catch (error) {
         console.error('AIモデル生成エラー:', error);
-        aiStatus.textContent = `❌ エラー: ${error.message}`;
-        aiStatus.style.color = '#dc3545';
+        
+        // Ensure aiStatus is correctly assigned to the DOM element
+        if (aiStatus) {
+            aiStatus.textContent = `❌ エラー: ${error.message}`;
+            aiStatus.style.color = '#dc3545';
+        } else {
+            console.error('Error: Could not find element with id "gemini-status-indicator"');
+        }
+        
         alert(`AIによるモデル生成に失敗しました。\nエラー: ${error.message}`);
     } finally {
         // UIの状態を元に戻します
-        aiGenerateBtn.disabled = false;
-        setTimeout(() => {
-            if (aiStatus.textContent.startsWith('❌')) {
-                 // エラーメッセージは少し長めに表示
-            } else {
-                aiStatus.style.display = 'none';
-            }
-        }, 5000);
+        if (aiGenerateBtn) {
+            aiGenerateBtn.disabled = false;
+        }
+        
+        if (aiStatus) {
+            setTimeout(() => {
+                if (aiStatus.textContent && aiStatus.textContent.startsWith('❌')) {
+                     // エラーメッセージは少し長めに表示
+                } else {
+                    aiStatus.style.display = 'none';
+                }
+            }, 5000);
+        }
     }
 }
 
@@ -13358,6 +13383,17 @@ function extractJsonFromResponse(apiResponse) {
  */
 function getCurrentModelData() {
     console.log('🔍 現在のモデル情報を取得中...');
+    
+    // Check if elements object exists
+    if (!elements) {
+        console.error('Error: elements object is not available');
+        return {
+            nodes: [],
+            members: [],
+            nodeLoads: [],
+            memberLoads: []
+        };
+    }
     
     const nodes = [];
     const members = [];
@@ -13460,6 +13496,12 @@ function setupAIModelGenerationListeners() {
     if (aiGenerateBtn) {
         aiGenerateBtn.addEventListener('click', () => {
             const promptInput = document.getElementById('natural-language-input');
+            if (!promptInput) {
+                console.error('Error: Could not find element with id "natural-language-input"');
+                alert('入力フィールドが見つかりません。ページを再読み込みしてください。');
+                return;
+            }
+            
             const userPrompt = promptInput.value.trim();
             const modeRadios = document.getElementsByName('ai-generation-mode');
             const selectedMode = Array.from(modeRadios).find(radio => radio.checked)?.value || 'new';
@@ -13471,6 +13513,8 @@ function setupAIModelGenerationListeners() {
                 alert('指示内容を入力してください。');
             }
         });
+    } else {
+        console.error('Error: Could not find element with id "generate-model-btn"');
     }
     
     // 現在のモデル確認ボタンのイベントリスナー
@@ -13502,6 +13546,11 @@ function updateModeDescription() {
     const descriptionElement = document.getElementById('mode-description');
     const previewBtn = document.getElementById('preview-current-model-btn');
     
+    if (!descriptionElement) {
+        console.error('Error: Could not find element with id "mode-description"');
+        return;
+    }
+    
     if (selectedMode === 'new') {
         descriptionElement.textContent = '作成したい構造モデルを自然言語で入力してください。(例: 高さ5m、スパン10mの門型ラーメン。柱脚は固定。)';
         if (previewBtn) previewBtn.style.display = 'none';
@@ -13518,22 +13567,36 @@ function updateModeDescription() {
 function integrateEditData(newState) {
     console.log('🔍 データ統合開始:', newState);
     
+    if (!newState || !newState.nodes) {
+        console.error('Error: Invalid newState data provided to integrateEditData');
+        return;
+    }
+    
     // 既存のデータを取得
     const existingModelData = getCurrentModelData();
     console.log('🔍 既存データ:', existingModelData);
     
+    if (!existingModelData) {
+        console.error('Error: Could not retrieve existing model data');
+        return;
+    }
+    
     // 新しいデータを既存データに統合
     const integratedState = {
-        nodes: [...existingModelData.nodes, ...newState.nodes],
-        members: [...existingModelData.members, ...newState.members],
-        nodeLoads: [...existingModelData.nodeLoads, ...newState.nodeLoads],
-        memberLoads: [...existingModelData.memberLoads, ...newState.memberLoads]
+        nodes: [...(existingModelData.nodes || []), ...(newState.nodes || [])],
+        members: [...(existingModelData.members || []), ...(newState.members || [])],
+        nodeLoads: [...(existingModelData.nodeLoads || []), ...(newState.nodeLoads || [])],
+        memberLoads: [...(existingModelData.memberLoads || []), ...(newState.memberLoads || [])]
     };
     
     console.log('🔍 統合後のデータ:', integratedState);
     
     // 統合されたデータでテーブルを更新
-    window.restoreState(integratedState);
+    if (window.restoreState) {
+        window.restoreState(integratedState);
+    } else {
+        console.error('Error: restoreState function is not available');
+    }
 }
 
 /**
