@@ -5543,6 +5543,10 @@ document.addEventListener('DOMContentLoaded', () => {
         // 3Dビューアにモデルデータを送信
         sendModelToViewer();
     };
+    
+    // Make drawOnCanvas globally accessible
+    window.drawOnCanvas = drawOnCanvas;
+    
     const drawDisplacementDiagram = (nodes, members, D_global, memberLoads, manualScale = null) => {
         const drawingCtx = getDrawingContext(elements.displacementCanvas);
         if (!drawingCtx) return;
@@ -7322,6 +7326,9 @@ document.addEventListener('DOMContentLoaded', () => {
         
         drawOnCanvas();
     };
+    
+    // Make updateSelfWeightDisplay globally accessible
+    window.updateSelfWeightDisplay = updateSelfWeightDisplay;
     
     // 自重考慮チェックボックスのイベントリスナー
     elements.considerSelfWeightCheckbox.addEventListener('change', function() {
@@ -10760,6 +10767,10 @@ const loadPreset = (index) => {
         calculate();
         runSectionCheck();
     };
+    
+    // Make runFullAnalysis globally accessible
+    window.runFullAnalysis = runFullAnalysis;
+    
     const runSectionCheck = () => {
         if (!lastResults) return;
         const selectedTerm = document.querySelector('input[name="load-term"]:checked').value;
@@ -13264,11 +13275,11 @@ function applyGeneratedModel(modelData) {
         window.isLoadingPreset = false;
 
         // 表示を更新
-        updateSelfWeightDisplay();
+        window.updateSelfWeightDisplay();
         panZoomState.isInitialized = false; 
         
         // 再描画と再計算
-        drawOnCanvas();
-        runFullAnalysis();
+        window.drawOnCanvas();
+        window.runFullAnalysis();
     }
 }
