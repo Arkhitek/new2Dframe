@@ -13514,6 +13514,15 @@ function getCurrentModelData() {
             firstDataRow: elements.membersTable.rows[1]?.cells?.length
         });
         
+        // ヘッダー行の内容を確認
+        if (elements.membersTable.rows[0]) {
+            const headerCells = [];
+            for (let j = 0; j < Math.min(elements.membersTable.rows[0].cells.length, 14); j++) {
+                headerCells.push(`col${j}: "${elements.membersTable.rows[0].cells[j]?.textContent || ''}"`);
+            }
+            console.log('🔍 部材テーブルヘッダー:', headerCells.join(', '));
+        }
+        
         for (let i = 1; i < elements.membersTable.rows.length; i++) {
             const row = elements.membersTable.rows[i];
             
@@ -13521,6 +13530,15 @@ function getCurrentModelData() {
             if (!row || !row.cells || row.cells.length < 3) {
                 console.warn(`部材テーブルの行 ${i} に必要なセルが不足しています`);
                 continue;
+            }
+            
+            // テーブル構造の詳細デバッグ（最初の部材のみ全列表示）
+            if (i === 1) {
+                const allCells = [];
+                for (let j = 0; j < Math.min(row.cells.length, 14); j++) {
+                    allCells.push(`cell${j}: "${row.cells[j]?.textContent || ''}"`);
+                }
+                console.log(`🔍 部材 ${i} 全列内容:`, allCells.join(', '));
             }
             
             // テーブル構造の詳細デバッグ
