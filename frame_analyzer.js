@@ -13641,7 +13641,7 @@ function getCurrentModelData() {
             }
         }
         
-        for (let i = 1; i < elements.nodesTable.rows.length; i++) {
+        for (let i = 0; i < elements.nodesTable.rows.length; i++) {
             const row = elements.nodesTable.rows[i];
             
             // 行とセルが存在するかチェック
@@ -13742,7 +13742,7 @@ function getCurrentModelData() {
             }
         }
         
-        for (let i = 1; i < elements.membersTable.rows.length; i++) {
+        for (let i = 0; i < elements.membersTable.rows.length; i++) {
             const row = elements.membersTable.rows[i];
             
             // 行とセルが存在するかチェック
@@ -13830,7 +13830,7 @@ function getCurrentModelData() {
     
     // 節点荷重情報を取得
     if (elements.nodeLoadsTable && elements.nodeLoadsTable.rows) {
-        for (let i = 1; i < elements.nodeLoadsTable.rows.length; i++) {
+        for (let i = 0; i < elements.nodeLoadsTable.rows.length; i++) {
             const row = elements.nodeLoadsTable.rows[i];
             
             // 行とセルが存在するかチェック
@@ -13866,7 +13866,7 @@ function getCurrentModelData() {
     
     // 部材荷重情報を取得
     if (elements.memberLoadsTable && elements.memberLoadsTable.rows) {
-        for (let i = 1; i < elements.memberLoadsTable.rows.length; i++) {
+        for (let i = 0; i < elements.memberLoadsTable.rows.length; i++) {
             const row = elements.memberLoadsTable.rows[i];
             
             // 行とセルが存在するかチェック
