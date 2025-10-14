@@ -6758,8 +6758,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         <tr style="background-color: #f0f0f0;">
                             <th style="border: 1px solid #ccc; padding: 8px;">位置 (m)</th>
                             <th style="border: 1px solid #ccc; padding: 8px;">軸力 N (kN)</th>
+                            <th style="border: 1px solid #ccc; padding: 8px;">せん断力 Q (kN)</th>
                             <th style="border: 1px solid #ccc; padding: 8px;">曲げ M (kN·m)</th>
                             <th style="border: 1px solid #ccc; padding: 8px;">軸応力度 σ_a (N/mm²)</th>
+                            <th style="border: 1px solid #ccc; padding: 8px;">せん断応力度 τ (N/mm²)</th>
                             <th style="border: 1px solid #ccc; padding: 8px;">曲げ応力度 σ_b (N/mm²)</th>
                             <th style="border: 1px solid #ccc; padding: 8px;">検定比 (D/C)</th>
                             <th style="border: 1px solid #ccc; padding: 8px;">判定</th>
@@ -6776,21 +6778,35 @@ document.addEventListener('DOMContentLoaded', () => {
             const M_parabolic = w * L * x / 2 - w * x**2 / 2;
             const M_x = M_linear + M_parabolic;
             
+            // せん断力の計算（等分布荷重を考慮）
+            const Q_x = force.Q_i - w * x;
+            
             const N = -force.N_i; // 軸力は部材全体で一定
             const sigma_a = (N * 1000) / (A * 1e6);
             const sigma_b = (Math.abs(M_x) * 1e6) / (Z * 1e9);
             
-            const status = ratio > 1.0 ? '❌ NG' : '✅ OK';
-            const rowStyle = ratio > 1.0 ? 'background-color: #fdd;' : '';
+            // せん断応力度の計算（τ = Q / A）
+            const tau = (Math.abs(Q_x) * 1000) / (A * 1e6);
+            
+            // せん断検定比の計算
+            const shear_ratio = tau / allowableStresses.fs;
+            
+            // 総合検定比（曲げ+軸力とせん断の最大値）
+            const combined_ratio = Math.max(ratio, shear_ratio);
+            
+            const status = combined_ratio > 1.0 ? '❌ NG' : '✅ OK';
+            const rowStyle = combined_ratio > 1.0 ? 'background-color: #fdd;' : '';
             
             detailHtml += `
                 <tr style="${rowStyle}">
                     <td style="border: 1px solid #ccc; padding: 8px; text-align: center;">${x.toFixed(2)}</td>
                     <td style="border: 1px solid #ccc; padding: 8px; text-align: center;">${N.toFixed(2)}</td>
+                    <td style="border: 1px solid #ccc; padding: 8px; text-align: center;">${Q_x.toFixed(2)}</td>
                     <td style="border: 1px solid #ccc; padding: 8px; text-align: center;">${M_x.toFixed(2)}</td>
                     <td style="border: 1px solid #ccc; padding: 8px; text-align: center;">${sigma_a.toFixed(2)}</td>
+                    <td style="border: 1px solid #ccc; padding: 8px; text-align: center;">${tau.toFixed(2)}</td>
                     <td style="border: 1px solid #ccc; padding: 8px; text-align: center;">${sigma_b.toFixed(2)}</td>
-                    <td style="border: 1px solid #ccc; padding: 8px; text-align: center; font-weight: bold;">${ratio.toFixed(3)}</td>
+                    <td style="border: 1px solid #ccc; padding: 8px; text-align: center; font-weight: bold;">${combined_ratio.toFixed(3)}</td>
                     <td style="border: 1px solid #ccc; padding: 8px; text-align: center;">${status}</td>
                 </tr>`;
         }
@@ -6800,9 +6816,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 </table>
                 <div style="margin-top: 20px; padding: 10px; background-color: #f9f9f9; border-radius: 5px;">
                     <h4>検定式</h4>
+                    <p><strong>曲げ+軸力の検定:</strong></p>
                     <p>軸力が引張の場合: D/C = σ_a/ft + σ_b/fb</p>
                     <p>軸力が圧縮の場合: D/C = σ_a/fc + σ_b/fb</p>
-                    <p>※ σ_a = N/A, σ_b = |M|/Z</p>
+                    <p><strong>せん断の検定:</strong></p>
+                    <p>D/C = τ/fs</p>
+                    <p><strong>総合検定比:</strong></p>
+                    <p>D/C = max(曲げ+軸力の検定比, せん断の検定比)</p>
+                    <p>※ σ_a = N/A, σ_b = |M|/Z, τ = |Q|/A</p>
                 </div>
             </div>`;
 
@@ -6815,12 +6836,59 @@ document.addEventListener('DOMContentLoaded', () => {
         popup.style.background = 'white';
         popup.style.border = '2px solid #ccc';
         popup.style.borderRadius = '10px';
-        popup.style.padding = '20px';
         popup.style.zIndex = '1000';
+        popup.style.width = '800px';
+        popup.style.height = '600px';
+        popup.style.minWidth = '400px';
+        popup.style.minHeight = '300px';
         popup.style.maxHeight = '90vh';
         popup.style.maxWidth = '90vw';
-        popup.style.overflowY = 'auto';
+        popup.style.overflow = 'hidden';
         popup.style.boxShadow = '0 4px 20px rgba(0,0,0,0.3)';
+        
+        // ドラッグハンドルを作成
+        const dragHandle = document.createElement('div');
+        dragHandle.style.background = '#f0f0f0';
+        dragHandle.style.padding = '10px 15px';
+        dragHandle.style.borderBottom = '1px solid #ccc';
+        dragHandle.style.borderRadius = '10px 10px 0 0';
+        dragHandle.style.cursor = 'move';
+        dragHandle.style.userSelect = 'none';
+        dragHandle.style.position = 'relative';
+        dragHandle.innerHTML = '<strong>詳細応力度計算結果 - ドラッグして移動・右下でリサイズ</strong>';
+        
+        // ドラッグ機能の実装
+        let isDragging = false;
+        let dragOffset = { x: 0, y: 0 };
+        
+        dragHandle.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            const rect = popup.getBoundingClientRect();
+            dragOffset.x = e.clientX - rect.left;
+            dragOffset.y = e.clientY - rect.top;
+            popup.style.cursor = 'move';
+            e.preventDefault();
+        });
+        
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            
+            const newX = e.clientX - dragOffset.x;
+            const newY = e.clientY - dragOffset.y;
+            
+            // 画面境界内に制限
+            const maxX = window.innerWidth - popup.offsetWidth;
+            const maxY = window.innerHeight - popup.offsetHeight;
+            
+            popup.style.left = Math.max(0, Math.min(newX, maxX)) + 'px';
+            popup.style.top = Math.max(0, Math.min(newY, maxY)) + 'px';
+            popup.style.transform = 'none';
+        });
+        
+        document.addEventListener('mouseup', () => {
+            isDragging = false;
+            popup.style.cursor = 'default';
+        });
         
         const closeButton = document.createElement('button');
         closeButton.textContent = '閉じる';
@@ -6833,8 +6901,68 @@ document.addEventListener('DOMContentLoaded', () => {
         closeButton.style.cursor = 'pointer';
         closeButton.onclick = () => popup.remove();
         
-        popup.innerHTML = detailHtml;
+        // コンテンツ部分を作成
+        const contentDiv = document.createElement('div');
+        contentDiv.innerHTML = detailHtml;
+        contentDiv.style.padding = '20px';
+        contentDiv.style.overflowY = 'auto';
+        contentDiv.style.height = 'calc(100% - 120px)'; // ヘッダーとボタン分を除く
+        contentDiv.style.boxSizing = 'border-box';
+        
+        // リサイズハンドルを追加
+        const resizeHandle = document.createElement('div');
+        resizeHandle.style.position = 'absolute';
+        resizeHandle.style.bottom = '0';
+        resizeHandle.style.right = '0';
+        resizeHandle.style.width = '20px';
+        resizeHandle.style.height = '20px';
+        resizeHandle.style.background = 'linear-gradient(-45deg, transparent 30%, #ccc 30%, #ccc 70%, transparent 70%)';
+        resizeHandle.style.cursor = 'nw-resize';
+        resizeHandle.style.borderRadius = '0 0 10px 0';
+        resizeHandle.style.zIndex = '1001';
+        
+        // リサイズ機能の実装
+        let isResizing = false;
+        let startX, startY, startWidth, startHeight, startLeft, startTop;
+        
+        resizeHandle.addEventListener('mousedown', (e) => {
+            isResizing = true;
+            startX = e.clientX;
+            startY = e.clientY;
+            startWidth = parseInt(window.getComputedStyle(popup).width, 10);
+            startHeight = parseInt(window.getComputedStyle(popup).height, 10);
+            startLeft = parseInt(window.getComputedStyle(popup).left, 10);
+            startTop = parseInt(window.getComputedStyle(popup).top, 10);
+            
+            document.body.style.userSelect = 'none';
+            e.preventDefault();
+        });
+        
+        document.addEventListener('mousemove', (e) => {
+            if (!isResizing) return;
+            
+            const deltaX = e.clientX - startX;
+            const deltaY = e.clientY - startY;
+            
+            const newWidth = Math.max(400, Math.min(window.innerWidth * 0.9, startWidth + deltaX));
+            const newHeight = Math.max(300, Math.min(window.innerHeight * 0.9, startHeight + deltaY));
+            
+            popup.style.width = newWidth + 'px';
+            popup.style.height = newHeight + 'px';
+        });
+        
+        document.addEventListener('mouseup', () => {
+            if (isResizing) {
+                isResizing = false;
+                document.body.style.userSelect = '';
+            }
+        });
+        
+        // 要素を組み立て
+        popup.appendChild(dragHandle);
+        popup.appendChild(contentDiv);
         popup.appendChild(closeButton);
+        popup.appendChild(resizeHandle);
         document.body.appendChild(popup);
     };
 
