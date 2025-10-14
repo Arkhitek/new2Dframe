@@ -13465,6 +13465,7 @@ async function generateModelWithAI(userPrompt, mode = 'new', retryCount = 0) {
     const API_URL = '/api/generate-model';
     const MAX_RETRIES = 3;
     const BASE_DELAY = 2000; // 2秒
+    const MAX_DELAY = 30000; // 最大30秒
 
     // UIを「生成中」の状態にします
     aiGenerateBtn.disabled = true;
@@ -13509,7 +13510,18 @@ async function generateModelWithAI(userPrompt, mode = 'new', retryCount = 0) {
 
         // 返答に問題があった場合のエラー処理
         if (!response.ok) {
-            throw new Error(data.error || 'サーバーでエラーが発生しました。');
+            let errorMessage = 'サーバーでエラーが発生しました。';
+            
+            if (response.status === 500) {
+                errorMessage = 'サーバー内部エラーが発生しました。';
+                if (data.error) {
+                    errorMessage = data.error;
+                }
+            } else if (data.error) {
+                errorMessage = data.error;
+            }
+            
+            throw new Error(errorMessage);
         }
 
         // 仲介役が転送してくれたGeminiの応答から、JSON部分だけを安全に取り出します
@@ -13534,7 +13546,7 @@ async function generateModelWithAI(userPrompt, mode = 'new', retryCount = 0) {
         
         // 容量超過エラーの場合はリトライを試行
         if (error.message && error.message.includes('Service tier capacity exceeded') && retryCount < MAX_RETRIES) {
-            const delay = BASE_DELAY * Math.pow(2, retryCount); // 指数バックオフ
+            const delay = Math.min(BASE_DELAY * Math.pow(2, retryCount), MAX_DELAY); // 指数バックオフ（上限あり）
             console.warn(`🔄 容量超過エラーが発生。${delay/1000}秒後にリトライします... (${retryCount + 1}/${MAX_RETRIES})`);
             
             aiStatus.textContent = `⏳ 容量超過のため${delay/1000}秒待機中...`;
@@ -13551,7 +13563,7 @@ async function generateModelWithAI(userPrompt, mode = 'new', retryCount = 0) {
         if (aiStatus) {
             if (error && error.message) {
                 if (error.message.includes('Service tier capacity exceeded')) {
-                    aiStatus.textContent = '❌ AIサービスが一時的に利用できません。しばらく時間をおいてから再試行してください。';
+                    aiStatus.innerHTML = '❌ AIサービスが一時的に利用できません。<br><button id="manual-retry-btn" style="margin-top: 5px; padding: 5px 10px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer;">再試行</button>';
                 } else {
                     aiStatus.textContent = `❌ エラー: ${error.message}`;
                 }
@@ -13559,12 +13571,27 @@ async function generateModelWithAI(userPrompt, mode = 'new', retryCount = 0) {
                 aiStatus.textContent = `❌ AIによるモデル生成に失敗しました。`;
             }
             aiStatus.style.color = '#dc3545';
+            
+            // 手動リトライボタンのイベントリスナーを設定
+            const manualRetryBtn = document.getElementById('manual-retry-btn');
+            if (manualRetryBtn) {
+                manualRetryBtn.addEventListener('click', () => {
+                    console.log('🔄 手動リトライが実行されました');
+                    generateModelWithAI(userPrompt, mode, 0); // リトライカウントをリセット
+                });
+            }
         }
         
         // ユーザーへの通知
         if (error && error.message) {
             if (error.message.includes('Service tier capacity exceeded')) {
-                alert('AIサービスが一時的に利用できません。\nしばらく時間をおいてから再試行してください。');
+                const shouldShowAlert = confirm('AIサービスが一時的に利用できません。\n「OK」をクリックすると再試行します。\n「キャンセル」をクリックすると終了します。');
+                if (shouldShowAlert) {
+                    // 手動リトライを実行
+                    setTimeout(() => {
+                        generateModelWithAI(userPrompt, mode, 0);
+                    }, 1000);
+                }
             } else {
                 alert(`AIによるモデル生成に失敗しました。\nエラー: ${error.message}`);
             }
