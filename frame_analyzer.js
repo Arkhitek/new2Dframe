@@ -13650,65 +13650,49 @@ function getCurrentModelData() {
                 continue;
             }
             
-            // 実際のテーブル構造に基づいて座標を取得
-            // ヘッダーがcol0: "1"なので、データ行の構造を再確認
-            let x, y, supportSelect, support;
-            
-            // 実際のテーブル構造を理解するための詳細デバッグ
-            console.log(`🔍 節点テーブル行 ${i} の全セル詳細:`);
-            for (let j = 0; j < Math.min(row.cells.length, 8); j++) {
-                const cell = row.cells[j];
-                const hasInput = cell?.querySelector('input');
-                const hasSelect = cell?.querySelector('select');
-                const textContent = cell?.textContent || '';
-                const innerHTML = cell?.innerHTML || '';
-                console.log(`  cell${j}: text="${textContent}" input=${!!hasInput} select=${!!hasSelect}`);
-                if (hasInput) {
-                    console.log(`    input value: ${hasInput.value}`);
-                }
-                if (hasSelect) {
-                    console.log(`    select value: ${hasSelect.value}`);
-                }
-            }
-            
             // セルの内容を確認して適切な列を特定
-            if (row.cells[0]?.textContent && !isNaN(parseFloat(row.cells[0].textContent))) {
-                // セル0に数値がある場合
-                const nodeNumber = parseFloat(row.cells[0].textContent);
-                
-                // X座標はcell1のinput要素から取得
-                const xInput = row.cells[1]?.querySelector('input');
-                x = xInput ? parseFloat(xInput.value) : 0;
-                
-                // Y座標はcell2のinput要素から取得
-                const yInput = row.cells[2]?.querySelector('input');
-                y = yInput ? parseFloat(yInput.value) : 0;
-                
-                // 境界条件はcell3のselect要素から取得
-                supportSelect = row.cells[3]?.querySelector('select');
-                support = supportSelect ? supportSelect.value : 'free';
-                
-                console.log(`🔍 節点 ${nodeNumber} の座標: (${x}, ${y}), 境界条件: ${support}`);
-            } else {
-                // セル0に数値がない場合はスキップ
-                console.log(`🔍 節点テーブル行 ${i} は無効なデータのためスキップ`);
+            const firstCellText = row.cells[0]?.textContent?.trim();
+            
+            // ヘッダー行の識別（数値以外または特定キーワードを含む場合はヘッダーとみなす）
+            const isHeader = !firstCellText || 
+                            isNaN(parseInt(firstCellText)) || 
+                            firstCellText.includes('節点') || 
+                            firstCellText.includes('Node') ||
+                            firstCellText.includes('番号') ||
+                            firstCellText.includes('#');
+            
+            if (isHeader) {
+                console.log(`🔍 節点テーブル行 ${i} はヘッダー行のためスキップ: "${firstCellText}"`);
                 continue;
             }
             
-            const nodeData = {
-                x: x,
-                y: y,
-                s: support
-            };
-            console.log(`🔍 節点 ${i} データ取得:`, nodeData);
+            // セル0に数値がある場合
+            const nodeNumber = parseInt(firstCellText);
             
-            // 座標が0,0の場合はスキップ（空の行の可能性）
-            if (x === 0 && y === 0) {
-                console.log(`🔍 節点 ${i} は空の行のためスキップします`);
-                continue;
+            // X座標はcell1のinput要素から取得
+            const xInput = row.cells[1]?.querySelector('input');
+            const x = xInput ? parseFloat(xInput.value) : 0;
+            
+            // Y座標はcell2のinput要素から取得
+            const yInput = row.cells[2]?.querySelector('input');
+            const y = yInput ? parseFloat(yInput.value) : 0;
+            
+            // 境界条件はcell3のselect要素から取得
+            const supportSelect = row.cells[3]?.querySelector('select');
+            const support = supportSelect ? supportSelect.value : 'free';
+            
+            console.log(`🔍 節点 ${nodeNumber} の座標: (${x}, ${y}), 境界条件: ${support}`);
+            
+            // 座標が有効な場合のみ追加
+            if (!isNaN(x) && !isNaN(y)) {
+                const nodeData = {
+                    x: x,
+                    y: y,
+                    s: support
+                };
+                console.log(`🔍 節点 ${nodeNumber} データ取得:`, nodeData);
+                nodes.push(nodeData);
             }
-            
-            nodes.push(nodeData);
         }
     }
     
@@ -13751,80 +13735,48 @@ function getCurrentModelData() {
                 continue;
             }
             
-            // テーブル構造の詳細デバッグ（最初の部材のみ全列表示）
-            if (i === 1) {
-                const allCells = [];
-                for (let j = 0; j < Math.min(row.cells.length, 14); j++) {
-                    allCells.push(`cell${j}: "${row.cells[j]?.textContent || ''}"`);
-                }
-                console.log(`🔍 部材 ${i} 全列内容:`, allCells.join(', '));
-            }
+            // セルの内容を確認して適切な列を特定
+            const firstCellText = row.cells[0]?.textContent?.trim();
             
-            // テーブル構造の詳細デバッグ
-            console.log(`🔍 部材 ${i} テーブル行構造:`, {
-                rowIndex: i,
-                cellCount: row.cells.length,
-                cell0Content: row.cells[0]?.textContent,
-                cell1Content: row.cells[1]?.textContent,
-                cell2Content: row.cells[2]?.textContent,
-                cell2HTML: row.cells[2]?.innerHTML
-            });
+            // ヘッダー行の識別（数値以外または特定キーワードを含む場合はヘッダーとみなす）
+            const isHeader = !firstCellText || 
+                            isNaN(parseInt(firstCellText)) || 
+                            firstCellText.includes('部材') || 
+                            firstCellText.includes('Member') ||
+                            firstCellText.includes('番号') ||
+                            firstCellText.includes('#');
             
-            // 部材テーブルの実際の構造に基づいてデータを取得
-            // ヘッダー情報から判断すると、列の構造が異なる
-            let startNode, endNode, sectionSelect, section;
-            
-            // 実際のテーブル構造を理解するための詳細デバッグ
-            console.log(`🔍 部材テーブル行 ${i} の全セル詳細:`);
-            for (let j = 0; j < Math.min(row.cells.length, 14); j++) {
-                const cell = row.cells[j];
-                const hasInput = cell?.querySelector('input');
-                const hasSelect = cell?.querySelector('select');
-                const textContent = cell?.textContent || '';
-                console.log(`  cell${j}: text="${textContent}" input=${!!hasInput} select=${!!hasSelect}`);
-                if (hasInput) {
-                    console.log(`    input value: ${hasInput.value}`);
-                }
-                if (hasSelect) {
-                    console.log(`    select value: ${hasSelect.value}`);
-                }
+            if (isHeader) {
+                console.log(`🔍 部材テーブル行 ${i} はヘッダー行のためスキップ: "${firstCellText}"`);
+                continue;
             }
             
             // セル0に数値がある場合のみ処理
-            if (row.cells[0]?.textContent && !isNaN(parseInt(row.cells[0].textContent))) {
-                const memberNumber = parseInt(row.cells[0].textContent);
-                
-                // 開始節点はcell1のinput要素から取得
-                const startNodeInput = row.cells[1]?.querySelector('input');
-                startNode = startNodeInput ? parseInt(startNodeInput.value) : 0;
-                
-                // 終点節点はcell2のinput要素から取得
-                const endNodeInput = row.cells[2]?.querySelector('input');
-                endNode = endNodeInput ? parseInt(endNodeInput.value) : 0;
-                
-                // 断面情報はcell8のtextContentから取得
-                section = row.cells[8]?.textContent || 'H-300x150x6.5x9';
-                
-                console.log(`🔍 部材 ${memberNumber}: 節点 ${startNode} → ${endNode}, 断面: ${section}`);
-            } else {
-                console.log(`🔍 部材テーブル行 ${i} は無効なデータのためスキップ`);
-                continue;
+            const memberNumber = parseInt(firstCellText);
+            
+            // 開始節点はcell1のinput要素から取得
+            const startNodeInput = row.cells[1]?.querySelector('input');
+            const startNode = startNodeInput ? parseInt(startNodeInput.value) : 0;
+            
+            // 終点節点はcell2のinput要素から取得
+            const endNodeInput = row.cells[2]?.querySelector('input');
+            const endNode = endNodeInput ? parseInt(endNodeInput.value) : 0;
+            
+            // 断面情報はcell8のtextContentから取得
+            const section = row.cells[8]?.textContent || 'H-300x150x6.5x9';
+            
+            console.log(`🔍 部材 ${memberNumber}: 節点 ${startNode} → ${endNode}, 断面: ${section}`);
+            
+            // 開始節点と終了節点が有効な場合のみ追加
+            if (!isNaN(startNode) && !isNaN(endNode) && startNode !== endNode) {
+                const memberData = {
+                    n1: startNode,
+                    n2: endNode,
+                    s: section
+                };
+                console.log(`🔍 部材 ${memberNumber} データ取得:`, memberData);
+                members.push(memberData);
             }
-            
-            const memberData = {
-                n1: startNode,
-                n2: endNode,
-                s: section
-            };
-            console.log(`🔍 部材 ${i} データ取得:`, memberData);
-            
-            // 開始節点と終了節点が同じ場合はスキップ（無効な部材）
-            if (startNode === endNode) {
-                console.log(`🔍 部材 ${i} は無効な部材（開始節点=終了節点）のためスキップします`);
-                continue;
-            }
-            
-            members.push(memberData);
         }
     }
     
@@ -13835,32 +13787,46 @@ function getCurrentModelData() {
             
             // 行とセルが存在するかチェック
             if (!row || !row.cells || row.cells.length < 4) {
-                // 空の行は警告を出さずにスキップ
-                if (row && row.cells && row.cells.length > 0) {
-                    // セルが存在するが数が不足している場合のみ警告
-                    console.warn(`節点荷重テーブルの行 ${i} に必要なセルが不足しています (セル数: ${row.cells.length})`);
-                }
                 continue;
             }
             
-            const node = parseInt(row.cells[0]?.textContent) || 1;
-            const fx = parseFloat(row.cells[1]?.textContent) || 0;
-            const fy = parseFloat(row.cells[2]?.textContent) || 0;
-            const mz = parseFloat(row.cells[3]?.textContent) || 0;
+            // ヘッダー行の識別
+            const firstCellText = row.cells[0]?.textContent?.trim();
+            const isHeader = !firstCellText || 
+                            isNaN(parseInt(firstCellText)) || 
+                            firstCellText.includes('節点') || 
+                            firstCellText.includes('Node') ||
+                            firstCellText.includes('番号');
+            
+            if (isHeader) {
+                continue;
+            }
+            
+            const nodeInput = row.cells[0]?.querySelector('input');
+            const fxInput = row.cells[1]?.querySelector('input');
+            const fyInput = row.cells[2]?.querySelector('input');
+            const mzInput = row.cells[3]?.querySelector('input');
+            
+            if (!nodeInput || !fxInput || !fyInput || !mzInput) {
+                continue;
+            }
+            
+            const node = parseInt(nodeInput.value) || 1;
+            const fx = parseFloat(fxInput.value) || 0;
+            const fy = parseFloat(fyInput.value) || 0;
+            const mz = parseFloat(mzInput.value) || 0;
             
             // 空の行（全ての荷重が0）はスキップ
             if (fx === 0 && fy === 0 && mz === 0) {
                 continue;
             }
             
-            if (fx !== 0 || fy !== 0 || mz !== 0) {
-                nodeLoads.push({
-                    n: node,
-                    fx: fx,
-                    fy: fy,
-                    mz: mz
-                });
-            }
+            nodeLoads.push({
+                n: node,
+                fx: fx,
+                fy: fy,
+                mz: mz
+            });
         }
     }
     
@@ -13871,32 +13837,46 @@ function getCurrentModelData() {
             
             // 行とセルが存在するかチェック
             if (!row || !row.cells || row.cells.length < 4) {
-                // 空の行は警告を出さずにスキップ
-                if (row && row.cells && row.cells.length > 0) {
-                    // セルが存在するが数が不足している場合のみ警告
-                    console.warn(`部材荷重テーブルの行 ${i} に必要なセルが不足しています (セル数: ${row.cells.length})`);
-                }
                 continue;
             }
             
-            const member = parseInt(row.cells[0]?.textContent) || 1;
-            const loadType = row.cells[1]?.textContent?.trim() || '';
-            const magnitude = parseFloat(row.cells[2]?.textContent) || 0;
-            const position = parseFloat(row.cells[3]?.textContent) || 0;
+            // ヘッダー行の識別
+            const firstCellText = row.cells[0]?.textContent?.trim();
+            const isHeader = !firstCellText || 
+                            isNaN(parseInt(firstCellText)) || 
+                            firstCellText.includes('部材') || 
+                            firstCellText.includes('Member') ||
+                            firstCellText.includes('番号');
+            
+            if (isHeader) {
+                continue;
+            }
+            
+            const memberInput = row.cells[0]?.querySelector('input');
+            const loadTypeInput = row.cells[1]?.querySelector('input');
+            const magnitudeInput = row.cells[2]?.querySelector('input');
+            const positionInput = row.cells[3]?.querySelector('input');
+            
+            if (!memberInput || !loadTypeInput || !magnitudeInput || !positionInput) {
+                continue;
+            }
+            
+            const member = parseInt(memberInput.value) || 1;
+            const loadType = loadTypeInput.value?.trim() || '';
+            const magnitude = parseFloat(magnitudeInput.value) || 0;
+            const position = parseFloat(positionInput.value) || 0;
             
             // 空の行（magnitudeが0または空）はスキップ
             if (magnitude === 0 || loadType === '') {
                 continue;
             }
             
-            if (magnitude !== 0) {
-                memberLoads.push({
-                    m: member,
-                    type: loadType,
-                    magnitude: magnitude,
-                    position: position
-                });
-            }
+            memberLoads.push({
+                m: member,
+                type: loadType,
+                magnitude: magnitude,
+                position: position
+            });
         }
     }
     
