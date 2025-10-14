@@ -13445,7 +13445,7 @@ document.addEventListener('DOMContentLoaded', () => {
  * Gemini APIを使用して自然言語からモデルを生成するメイン関数
  * @param {string} userPrompt ユーザーが入力した指示
  */
-async function generateModelWithAI(userPrompt, mode = 'new') {
+async function generateModelWithAI(userPrompt, mode = 'new', retryCount = 0) {
     const aiGenerateBtn = document.getElementById('generate-model-btn');
     const aiStatus = document.getElementById('gemini-status-indicator');
 
@@ -13462,16 +13462,22 @@ async function generateModelWithAI(userPrompt, mode = 'new') {
         return;
     }
 
-    // ★★★ 変更点 ★★★
-    // 宛先をGoogleから、我々が作った仲介役プログラムの住所に変更します。
-    // netlify.tomlの設定により、このURLへのアクセスは自動的にサーバーレス関数に転送されます。
-    const API_URL = '/api/generate-model'; 
+    const API_URL = '/api/generate-model';
+    const MAX_RETRIES = 3;
+    const BASE_DELAY = 2000; // 2秒
 
     // UIを「生成中」の状態にします
     aiGenerateBtn.disabled = true;
     aiStatus.style.display = 'block';
-    aiStatus.textContent = mode === 'edit' ? '🧠 AIがモデルを編集中です...' : '🧠 AIがモデルを生成中です...';
-    aiStatus.style.color = '#005A9C';
+    
+    // リトライ中の場合は特別なメッセージを表示
+    if (retryCount > 0) {
+        aiStatus.textContent = `🔄 リトライ中... (${retryCount}/${MAX_RETRIES})`;
+        aiStatus.style.color = '#ffc107';
+    } else {
+        aiStatus.textContent = mode === 'edit' ? '🧠 AIがモデルを編集中です...' : '🧠 AIがモデルを生成中です...';
+        aiStatus.style.color = '#005A9C';
+    }
 
     try {
         // 現在のモデル情報を取得（追加編集モードの場合）
@@ -13481,15 +13487,15 @@ async function generateModelWithAI(userPrompt, mode = 'new') {
             console.log('🔍 追加編集モード: 現在のモデル情報を取得しました', currentModelData);
         }
 
-        // ★★★ 変更点 ★★★
-        // 仲介役に送るリクエストを作成します。秘密の鍵(APIキー)は含めません。
         const requestBody = {
             prompt: userPrompt,
             mode: mode,
             currentModel: currentModelData
         };
 
-        // 我々の仲介役プログラムにリクエストを送信します
+        console.log(`🔍 AIリクエスト送信中... (リトライ: ${retryCount}/${MAX_RETRIES})`);
+
+        // APIリクエストを送信
         const response = await fetch(API_URL, {
             method: 'POST',
             headers: {
@@ -13511,32 +13517,57 @@ async function generateModelWithAI(userPrompt, mode = 'new') {
         const modelData = JSON.parse(jsonText);
 
         aiStatus.textContent = '✅ モデルデータを適用しています...';
+        aiStatus.style.color = '#28a745';
 
         // 取り出したモデルデータを、アプリケーションのテーブルに反映させます
         applyGeneratedModel(modelData, userPrompt, mode);
 
-        alert(mode === 'edit' ? 'AIによるモデル編集が完了しました。' : 'AIによるモデル生成が完了しました。');
+        const successMessage = mode === 'edit' ? 'AIによるモデル編集が完了しました。' : 'AIによるモデル生成が完了しました。';
+        if (retryCount > 0) {
+            alert(`${successMessage} (${retryCount}回のリトライ後に成功)`);
+        } else {
+            alert(successMessage);
+        }
 
     } catch (error) {
         console.error('AIモデル生成エラー:', error);
         
-        // Ensure aiStatus is correctly assigned to the DOM element
+        // 容量超過エラーの場合はリトライを試行
+        if (error.message && error.message.includes('Service tier capacity exceeded') && retryCount < MAX_RETRIES) {
+            const delay = BASE_DELAY * Math.pow(2, retryCount); // 指数バックオフ
+            console.warn(`🔄 容量超過エラーが発生。${delay/1000}秒後にリトライします... (${retryCount + 1}/${MAX_RETRIES})`);
+            
+            aiStatus.textContent = `⏳ 容量超過のため${delay/1000}秒待機中...`;
+            aiStatus.style.color = '#ffc107';
+            
+            // リトライ前に少し待機
+            await new Promise(resolve => setTimeout(resolve, delay));
+            
+            // リトライ実行
+            return generateModelWithAI(userPrompt, mode, retryCount + 1);
+        }
+        
+        // リトライ不可能またはリトライ上限に達した場合のエラー処理
         if (aiStatus) {
-            // Check if error and error.message exist before accessing
             if (error && error.message) {
-                aiStatus.textContent = `❌ エラー: ${error.message}`;
+                if (error.message.includes('Service tier capacity exceeded')) {
+                    aiStatus.textContent = '❌ AIサービスが一時的に利用できません。しばらく時間をおいてから再試行してください。';
+                } else {
+                    aiStatus.textContent = `❌ エラー: ${error.message}`;
+                }
             } else {
-                // Provide a generic error message if error.message is not available
                 aiStatus.textContent = `❌ AIによるモデル生成に失敗しました。`;
             }
             aiStatus.style.color = '#dc3545';
-        } else {
-            console.error('Error: Could not find element with id "gemini-status-indicator"');
         }
         
-        // Check if error.message exists before including it in the alert
+        // ユーザーへの通知
         if (error && error.message) {
-            alert(`AIによるモデル生成に失敗しました。\nエラー: ${error.message}`);
+            if (error.message.includes('Service tier capacity exceeded')) {
+                alert('AIサービスが一時的に利用できません。\nしばらく時間をおいてから再試行してください。');
+            } else {
+                alert(`AIによるモデル生成に失敗しました。\nエラー: ${error.message}`);
+            }
         } else {
             alert(`AIによるモデル生成に失敗しました。`);
         }
