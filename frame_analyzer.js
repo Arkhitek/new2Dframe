@@ -14060,10 +14060,56 @@ function integrateEditData(newState) {
         r_forced: node.r_forced || 0
     }));
     
-    // 新しいデータを既存データに統合
+    // 重複を防ぐための節点ID生成関数
+    const generateNodeId = (node) => `${node.x.toFixed(3)}_${node.y.toFixed(3)}`;
+    
+    // 既存節点のIDセットを作成
+    const existingNodeIds = new Set(existingNodesWithDefaults.map(generateNodeId));
+    
+    // 新しい節点から既存と重複しないもののみを抽出
+    const uniqueNewNodes = (newState.nodes || []).filter(node => {
+        const nodeId = generateNodeId(node);
+        return !existingNodeIds.has(nodeId);
+    });
+    
+    console.log(`🔍 既存節点数: ${existingNodesWithDefaults.length}, 新規節点数: ${uniqueNewNodes.length}`);
+    
+    // 統合後の全節点リストを作成（既存 + 新規）
+    const allNodes = [...existingNodesWithDefaults, ...uniqueNewNodes];
+    
+    // 部材の重複チェック（座標ベース）
+    const generateMemberId = (member) => {
+        // 節点インデックスから実際の節点座標を取得
+        const startNode = allNodes[member.i - 1];
+        const endNode = allNodes[member.j - 1];
+        
+        if (startNode && endNode) {
+            // 座標の順序を正規化（小さい座標から大きい座標へ）
+            const startId = generateNodeId(startNode);
+            const endId = generateNodeId(endNode);
+            return startId < endId ? `${startId}_${endId}` : `${endId}_${startId}`;
+        }
+        return null;
+    };
+    
+    // 既存部材のIDセットを作成
+    const existingMemberIds = new Set((existingModelData.members || []).map(member => {
+        const memberId = generateMemberId(member);
+        return memberId;
+    }).filter(id => id !== null));
+    
+    // 新しい部材から重複しないもののみを抽出
+    const uniqueNewMembers = (newState.members || []).filter(member => {
+        const memberId = generateMemberId(member);
+        return memberId && !existingMemberIds.has(memberId);
+    });
+    
+    console.log(`🔍 既存部材数: ${(existingModelData.members || []).length}, 新規部材数: ${uniqueNewMembers.length}`);
+    
+    // 新しいデータを既存データに統合（重複なし）
     const integratedState = {
-        nodes: [...existingNodesWithDefaults, ...(newState.nodes || [])],
-        members: [...(existingModelData.members || []), ...(newState.members || [])],
+        nodes: [...existingNodesWithDefaults, ...uniqueNewNodes],
+        members: [...(existingModelData.members || []), ...uniqueNewMembers],
         nodeLoads: [...(existingModelData.nodeLoads || []), ...(newState.nodeLoads || [])],
         memberLoads: [...(existingModelData.memberLoads || []), ...(newState.memberLoads || [])]
     };
