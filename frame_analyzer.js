@@ -1621,6 +1621,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Make elements object globally accessible
     window.elements = elements;
 
+    // AI機能の表示切り替え設定
+    setupAIFeaturesToggle();
+    
     // AIモデル生成のイベントリスナー設定
     setupAIModelGenerationListeners();
 
@@ -13955,6 +13958,36 @@ function getCurrentModelData() {
 }
 
 /**
+ * AI機能の表示切り替えを設定する関数
+ */
+function setupAIFeaturesToggle() {
+    console.log('🔍 AI機能の表示切り替えを設定中...');
+    
+    const aiToggleCheckbox = document.getElementById('ai-features-toggle');
+    const aiGeneratorSection = document.getElementById('ai-generator-section');
+    
+    if (!aiToggleCheckbox || !aiGeneratorSection) {
+        console.error('Error: AI機能の切り替え要素が見つかりません');
+        return;
+    }
+    
+    // チェックボックスのイベントリスナー
+    aiToggleCheckbox.addEventListener('change', (event) => {
+        const isChecked = event.target.checked;
+        
+        if (isChecked) {
+            aiGeneratorSection.style.display = 'block';
+            console.log('✅ AI機能を表示しました');
+        } else {
+            aiGeneratorSection.style.display = 'none';
+            console.log('❌ AI機能を非表示にしました');
+        }
+    });
+    
+    console.log('✅ AI機能の表示切り替え設定完了');
+}
+
+/**
  * AIモデル生成のイベントリスナーを設定する関数
  */
 function setupAIModelGenerationListeners() {
@@ -14179,12 +14212,14 @@ function previewCurrentModel() {
 /**
  * 自然言語から柱脚の境界条件を解析する関数
  * @param {string} naturalLanguageInput 自然言語の入力テキスト
+ * @param {string} mode 生成モード ('new' または 'edit')
  * @returns {string} 境界条件 ('free', 'pinned', 'fixed', 'roller')
  */
-function parseFoundationCondition(naturalLanguageInput) {
+function parseFoundationCondition(naturalLanguageInput, mode = 'new') {
     console.log(`🔍 parseFoundationCondition 開始:`, {
         input: naturalLanguageInput,
-        type: typeof naturalLanguageInput
+        type: typeof naturalLanguageInput,
+        mode: mode
     });
     
     // 入力が文字列でない場合は文字列に変換、null/undefined の場合は空文字列
@@ -14194,8 +14229,10 @@ function parseFoundationCondition(naturalLanguageInput) {
     
     // 空文字列の場合はデフォルト値を返す
     if (!naturalLanguageInput.trim()) {
-        console.log('🔍 入力が空文字列のため free を返す');
-        return 'free'; // 入力がない場合は自由
+        // 新規作成モードではデフォルトで固定、編集モードでは自由
+        const defaultValue = mode === 'new' ? 'fixed' : 'free';
+        console.log(`🔍 入力が空文字列のため ${defaultValue} を返す (モード: ${mode})`);
+        return defaultValue;
     }
     
     const text = naturalLanguageInput.toLowerCase();
@@ -14211,8 +14248,10 @@ function parseFoundationCondition(naturalLanguageInput) {
     });
     
     if (!hasFoundationMention) {
-        console.log('🔍 柱脚関連キーワードが見つからないため free を返す');
-        return 'free'; // デフォルトは自由
+        // 新規作成モードではデフォルトで固定、編集モードでは自由
+        const defaultValue = mode === 'new' ? 'fixed' : 'free';
+        console.log(`🔍 柱脚関連キーワードが見つからないため ${defaultValue} を返す (モード: ${mode})`);
+        return defaultValue;
     }
     
     // 境界条件のキーワードを検索
@@ -14272,12 +14311,13 @@ function applyGeneratedModel(modelData, naturalLanguageInput = '', mode = 'new')
             // 既存データは保持し、AIが返したデータで統合・更新する
         }
         
-        // 柱脚の境界条件を解析
+        // 柱脚の境界条件を解析（新規作成モードではデフォルトで固定）
         console.log(`🔍 自然言語入力: "${naturalLanguageInput}"`);
-        const foundationCondition = parseFoundationCondition(naturalLanguageInput);
+        const foundationCondition = parseFoundationCondition(naturalLanguageInput, mode);
         console.log('🔍 柱脚境界条件解析結果:', {
             naturalLanguageInput: naturalLanguageInput,
-            foundationCondition: foundationCondition
+            foundationCondition: foundationCondition,
+            mode: mode
         });
         console.log(`🔍 柱脚境界条件値: "${foundationCondition}"`);
         
