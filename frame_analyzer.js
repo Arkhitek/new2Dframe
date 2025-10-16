@@ -13812,6 +13812,13 @@ async function generateModelWithAIInternal(userPrompt, mode = 'new', retryCount 
         let userFriendlyMessage = 'AIモデルの生成に失敗しました。';
         let showFallbackOption = false;
         
+        console.log('🔍 エラーハンドリング開始:', { 
+            errorMessage: error ? error.message : 'No error message',
+            userPrompt: userPrompt,
+            mode: mode,
+            retryCount: retryCount 
+        });
+        
         if (error && error.message) {
             if (error.message.includes('サーバーエラー: 500')) {
                 userFriendlyMessage = 'サーバーで一時的なエラーが発生しました。しばらく時間をおいてから再度お試しください。';
@@ -13843,20 +13850,40 @@ async function generateModelWithAIInternal(userPrompt, mode = 'new', retryCount 
                 userFriendlyMessage = '処理に時間がかかりすぎました。より簡単な指示で再度お試しください。';
             } else {
                 userFriendlyMessage = error.message;
+                // その他のエラーでもフォールバック機能を提案
+                showFallbackOption = true;
             }
             
             console.error(`AIによるモデル生成に失敗しました。エラー: ${error.message}`);
         } else {
             console.error(`AIによるモデル生成に失敗しました。`);
+            // エラーメッセージがない場合もフォールバック機能を提案
+            showFallbackOption = true;
         }
         
+        console.log('🔍 フォールバック機能の条件:', { 
+            showFallbackOption, 
+            userFriendlyMessage,
+            hasUserPrompt: !!userPrompt 
+        });
+        
         // フォールバック機能の提案
-        if (showFallbackOption && userPrompt) {
-            const fallbackMessage = `❌ ${userFriendlyMessage}\n\n${retryCount > 0 ? `(${retryCount}回のリトライ後に失敗)` : ''}\n\n💡 代替案: 簡単な構造テンプレートを使用しますか？\n「はい」を選択すると、基本的な${userPrompt}構造を生成します。`;
+        if (showFallbackOption) {
+            // userPromptを取得（関数の引数から）
+            const currentPrompt = arguments[0] || userPrompt || '構造';
+            const fallbackMessage = `❌ ${userFriendlyMessage}\n\n${retryCount > 0 ? `(${retryCount}回のリトライ後に失敗)` : ''}\n\n💡 代替案を選択してください:\n1. 簡単な構造テンプレートを使用\n2. 手動で構造を作成\n3. キャンセル`;
             
-            if (confirm(fallbackMessage)) {
+            console.log('🔧 フォールバック機能を提案中...', { showFallbackOption, currentPrompt });
+            
+            const choice = prompt(fallbackMessage + '\n\n選択肢の番号を入力してください (1, 2, 3):');
+            
+            if (choice === '1') {
                 console.log('🔧 フォールバック機能を使用して構造を生成します');
-                generateFallbackStructure(userPrompt, mode);
+                generateFallbackStructure(currentPrompt, mode);
+                return;
+            } else if (choice === '2') {
+                console.log('🔧 手動作成モードに切り替えます');
+                safeAlert('手動で構造を作成してください。\n\n1. 「節点追加」ボタンで節点を追加\n2. 「部材追加」ボタンで部材を追加\n3. 必要に応じて荷重を設定');
                 return;
             }
         }
