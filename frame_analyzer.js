@@ -14708,10 +14708,71 @@ function parseFoundationCondition(naturalLanguageInput, mode = 'new') {
  * @param {string} naturalLanguageInput 元の自然言語入力（柱脚条件解析用）
  * @param {string} mode 生成モード ('new' または 'edit')
  */
-function applyGeneratedModel(modelData, naturalLanguageInput = '', mode = 'new') {
+// モデルデータの妥当性をチェックする関数
+function validateModelData(modelData) {
     if (!modelData || !modelData.nodes) {
         throw new Error('生成されたモデルデータが無効です。');
     }
+
+    const nodes = modelData.nodes;
+    const members = modelData.members || [];
+    const nodeLoads = modelData.nodeLoads || modelData.nl || [];
+    const memberLoads = modelData.memberLoads || modelData.ml || [];
+
+    // 節点数をチェック
+    if (nodes.length === 0) {
+        throw new Error('節点が設定されていません。');
+    }
+
+    // 部材の節点参照をチェック
+    members.forEach((member, index) => {
+        if (!member.i || !member.j) {
+            throw new Error(`部材${index + 1}に節点番号が設定されていません。`);
+        }
+        if (member.i < 1 || member.i > nodes.length) {
+            throw new Error(`部材${index + 1}の開始節点番号(${member.i})が無効です。節点数: ${nodes.length}`);
+        }
+        if (member.j < 1 || member.j > nodes.length) {
+            throw new Error(`部材${index + 1}の終了節点番号(${member.j})が無効です。節点数: ${nodes.length}`);
+        }
+        if (member.i === member.j) {
+            throw new Error(`部材${index + 1}の開始節点と終了節点が同じです。`);
+        }
+    });
+
+    // 節点荷重の節点参照をチェック
+    nodeLoads.forEach((load, index) => {
+        const nodeNum = load.n || load.node;
+        if (!nodeNum) {
+            throw new Error(`節点荷重${index + 1}に節点番号が設定されていません。`);
+        }
+        if (nodeNum < 1 || nodeNum > nodes.length) {
+            throw new Error(`節点荷重${index + 1}の節点番号(${nodeNum})が無効です。節点数: ${nodes.length}`);
+        }
+    });
+
+    // 部材荷重の部材参照をチェック
+    memberLoads.forEach((load, index) => {
+        const memberNum = load.m || load.member;
+        if (!memberNum) {
+            throw new Error(`部材荷重${index + 1}に部材番号が設定されていません。`);
+        }
+        if (memberNum < 1 || memberNum > members.length) {
+            throw new Error(`部材荷重${index + 1}の部材番号(${memberNum})が無効です。部材数: ${members.length}`);
+        }
+    });
+
+    console.log('🔍 モデルデータの妥当性チェック完了:', {
+        節点数: nodes.length,
+        部材数: members.length,
+        節点荷重数: nodeLoads.length,
+        部材荷重数: memberLoads.length
+    });
+}
+
+function applyGeneratedModel(modelData, naturalLanguageInput = '', mode = 'new') {
+    // モデルデータの妥当性をチェック
+    validateModelData(modelData);
 
     const confirmMessage = mode === 'edit' 
         ? 'AIが編集したモデルを適用します。現在のモデルデータが更新されますが、よろしいですか？'
