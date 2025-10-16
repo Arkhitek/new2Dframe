@@ -1,65 +1,49 @@
-// 外部と通信するための道具をインポートします
-const fetch = require('node-fetch');
+// Gemini APIと通信するための道具をインポートします
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 // Vercelのサーバーレス関数のエントリーポイント
 export default async function handler(req, res) {
     if (req.method !== 'POST') {
-        res.status(405).json({ error: 'Method Not Allowed' });
-        return;
+        return res.status(405).json({ error: 'Method Not Allowed' });
     }
 
     try {
         const { prompt: userPrompt, mode = 'new', currentModel } = req.body;
         if (!userPrompt) {
-            res.status(400).json({ error: '指示内容が空です。' });
-            return;
+            return res.status(400).json({ error: '指示内容が空です。' });
         }
 
-        const API_KEY = process.env.MISTRAL_API_KEY;
+        // ▼▼▼【変更点 1】APIキーの環境変数名を変更 ▼▼▼
+        const API_KEY = process.env.GEMINI_API_KEY;
         if (!API_KEY) {
-            throw new Error("Mistral AIのAPIキーがサーバーに設定されていません。");
+            throw new Error("Gemini APIのキーがサーバーに設定されていません。");
         }
         
-        const API_URL = 'https://api.mistral.ai/v1/chat/completions';
-        
+        // ▼▼▼【変更点 2】Gemini APIクライアントを初期化 ▼▼▼
+        const genAI = new GoogleGenerativeAI(API_KEY);
+        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+
+        // ▼▼▼【変更点 3】プロンプトを結合して単一のテキストにする ▼▼▼
+        // (既存のプロンプト生成ロジックはそのまま利用します)
         const systemPrompt = createSystemPromptForBackend(mode, currentModel);
-        
-        // 追加編集モードの場合は現在のモデル情報を含めてプロンプトを作成
         let userMessage = userPrompt;
         if (mode === 'edit' && currentModel) {
             userMessage = createEditPrompt(userPrompt, currentModel);
         }
+        // システムプロンプトとユーザープロンプトを結合
+        const fullPrompt = `${systemPrompt}\n\nユーザーの指示: "${userMessage}"`;
+        
 
-        const requestBody = {
-            model: "mistral-large-latest",
-            messages: [
-                { "role": "system", "content": systemPrompt },
-                { "role": "user", "content": userMessage }
-            ],
-            response_format: { "type": "json_object" }
-        };
-
-        const mistralResponse = await fetch(API_URL, {
-            method: 'POST',
-            headers: { 
-                'Authorization': `Bearer ${API_KEY}`,
-                'Content-Type': 'application/json' 
-            },
-            body: JSON.stringify(requestBody),
-        });
-
-        const data = await mistralResponse.json();
-
-        if (!mistralResponse.ok) {
-            console.error('Mistral AI Error:', data);
-            throw new Error(data.message || 'Mistral AIでエラーが発生しました。');
+        // ▼▼▼【変更点 4】Mistral API呼び出しをGemini API呼び出しに置き換え ▼▼▼
+        const result = await model.generateContent(fullPrompt);
+        const response = await result.response;
+        
+        if (!response) {
+            throw new Error("Gemini AIから予期しない形式のレスポンスがありました。");
         }
+        const generatedText = response.text();
 
-        if (!data.choices || !data.choices[0] || !data.choices[0].message.content) {
-             throw new Error("Mistral AIから予期しない形式のレスポンスがありました。");
-        }
-        const generatedText = data.choices[0].message.content;
-
+        // フロントエンドが期待するレスポンス形式に合わせる
         const responseForFrontend = {
             candidates: [{
                 content: {
@@ -74,9 +58,20 @@ export default async function handler(req, res) {
 
     } catch (error) {
         console.error('サーバーレス関数エラー:', error);
-        res.status(500).json({ error: error.message });
+        let errorMessage = 'AIモデルの生成に失敗しました。';
+        if (error.message.includes('SAFETY')) {
+            errorMessage = '安全性の設定により、応答がブロックされました。より一般的な表現で試してください。';
+        } else if (error instanceof SyntaxError) {
+             errorMessage = 'AIからの応答が不正な形式でした。少し表現を変えて再度試してください。';
+        } else {
+            errorMessage = error.message;
+        }
+        res.status(500).json({ error: errorMessage });
     }
 }
+
+
+// ▼▼▼ 以下、既存のプロンプト生成関数 (変更なし) ▼▼▼
 
 function createSystemPromptForBackend(mode = 'new', currentModel = null) {
     let prompt = `
@@ -156,8 +151,8 @@ JSONデータのみを出力し、前後の説明やマークダウンの\`\`\`j
 - 節点番号と部材番号は1から始まる連番です。
 - 存在しない節点番号や部材番号を参照しないでください。
 - **節点番号と部材参照の重要ルール:**
-  - 節点は配列の順序で番号が付けられます（1番目、2番目、3番目...）
-  - 部材の\`i\`と\`j\`は、実際に存在する節点番号を参照してください
+  - 節点は配列の順序（1から始まる）で決まります
+  - 部材の\`i\`と\`j\`は必ず存在する節点番号を参照してください
   - 例: 節点配列に3つの節点がある場合、部材は節点1、2、3のみを参照できます
   - 複数層の構造では、下層から上層へ順序良く節点を配置してください
   - ラーメン構造では、柱と梁の接続点が正確に一致するように節点番号を設定してください
