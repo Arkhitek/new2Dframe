@@ -14212,16 +14212,37 @@ function integrateEditData(newState) {
     });
     
     console.log(`🔍 既存部材数: ${(existingModelData.members || []).length}, 新規部材数: ${uniqueNewMembers.length}`);
+    console.log(`🔍 既存節点荷重数: ${(existingModelData.nodeLoads || []).length}, 新規節点荷重数: ${(newState.nodeLoads || []).length}`);
+    console.log(`🔍 既存部材荷重数: ${(existingModelData.memberLoads || []).length}, 新規部材荷重数: ${(newState.memberLoads || []).length}`);
+    
+    // 荷重条件のプロパティ名をrestoreState関数が期待する形式に変換
+    const convertNodeLoads = (loads) => {
+        return (loads || []).map(load => ({
+            node: load.n || load.node,
+            px: load.px || load.fx || 0,
+            py: load.py || load.fy || 0,
+            mz: load.mz || 0
+        }));
+    };
+    
+    const convertMemberLoads = (loads) => {
+        return (loads || []).map(load => ({
+            member: load.m || load.member,
+            w: load.w || 0
+        }));
+    };
     
     // 新しいデータを既存データに統合（重複なし）
     const integratedState = {
         nodes: [...existingNodesWithDefaults, ...uniqueNewNodes],
         members: [...(existingModelData.members || []), ...uniqueNewMembers],
-        nodeLoads: [...(existingModelData.nodeLoads || []), ...(newState.nodeLoads || [])],
-        memberLoads: [...(existingModelData.memberLoads || []), ...(newState.memberLoads || [])]
+        nodeLoads: [...convertNodeLoads(existingModelData.nodeLoads), ...convertNodeLoads(newState.nodeLoads)],
+        memberLoads: [...convertMemberLoads(existingModelData.memberLoads), ...convertMemberLoads(newState.memberLoads)]
     };
     
     console.log('🔍 統合後のデータ:', integratedState);
+    console.log('🔍 統合後の節点荷重詳細:', integratedState.nodeLoads);
+    console.log('🔍 統合後の部材荷重詳細:', integratedState.memberLoads);
     
     // 統合されたデータでテーブルを更新
     if (window.restoreState) {
