@@ -14386,48 +14386,44 @@ function integrateEditData(newState) {
         return null;
     };
     
+    // 部材の修正検出用の関数（節点番号ベース）
+    const generateMemberIdByNodeNumbers = (member) => {
+        return `member_${member.i}_${member.j}`;
+    };
+    
     // 部材の統合ロジック（既存部材の更新と新規部材の追加を考慮）
     const existingMembers = existingModelData.members || [];
     const newMembers = newState.members || [];
     
-    // 既存部材と新規部材を統合（修正・追加対応）
+    console.log(`🔍 既存部材数: ${existingMembers.length}, 新規部材数: ${newMembers.length}`);
+    console.log(`🔍 既存部材詳細:`, existingMembers);
+    console.log(`🔍 新規部材詳細:`, newMembers);
+    
+    // 部材の統合（配列位置ベースでAIが生成したデータを基に既存データを更新）
     const integratedMembers = [];
     
-    // 既存部材を処理
-    existingMembers.forEach(existingMember => {
-        const existingMemberId = generateMemberId(existingMember);
+    // 既存部材の最大数と新規部材の最大数を比較
+    const maxMembers = Math.max(existingMembers.length, newMembers.length);
+    
+    for (let i = 0; i < maxMembers; i++) {
+        const existingMember = existingMembers[i];
+        const newMember = newMembers[i];
         
-        // 同じIDを持つ新規部材があるかチェック（修正された部材）
-        const updatedMember = newMembers.find(newMember => {
-            const newMemberId = generateMemberId(newMember);
-            return newMemberId === existingMemberId;
-        });
+        console.log(`🔍 部材${i + 1}処理中: 既存=`, existingMember, '新規=', newMember);
         
-        if (updatedMember) {
-            // 修正された部材がある場合は新規部材を使用
-            console.log(`🔍 部材修正検出: ${existingMemberId}`, updatedMember);
-            integratedMembers.push(updatedMember);
-        } else {
-            // 修正されていない場合は既存部材を保持
+        if (newMember) {
+            // 新規部材がある場合は新規部材を使用（修正された部材または新規部材）
+            console.log(`🔍 部材${i + 1}使用: 新規部材`, newMember);
+            integratedMembers.push(newMember);
+        } else if (existingMember) {
+            // 新規部材がなく既存部材がある場合は既存部材を保持
+            console.log(`🔍 部材${i + 1}保持: 既存部材`, existingMember);
             integratedMembers.push(existingMember);
         }
-    });
+    }
     
-    // 完全に新しい部材を追加
-    newMembers.forEach(newMember => {
-        const newMemberId = generateMemberId(newMember);
-        const isExistingMember = existingMembers.some(existingMember => {
-            const existingMemberId = generateMemberId(existingMember);
-            return existingMemberId === newMemberId;
-        });
-        
-        if (!isExistingMember) {
-            console.log(`🔍 新規部材追加: ${newMemberId}`, newMember);
-            integratedMembers.push(newMember);
-        }
-    });
-    
-    console.log(`🔍 既存部材数: ${existingMembers.length}, 新規部材数: ${newMembers.length}, 統合後部材数: ${integratedMembers.length}`);
+    console.log(`🔍 統合後部材数: ${integratedMembers.length}`);
+    console.log(`🔍 統合後部材詳細:`, integratedMembers);
     console.log(`🔍 既存節点荷重数: ${(existingModelData.nodeLoads || []).length}, 新規節点荷重数: ${(newState.nodeLoads || []).length}`);
     console.log(`🔍 既存部材荷重数: ${(existingModelData.memberLoads || []).length}, 新規部材荷重数: ${(newState.memberLoads || []).length}`);
     
