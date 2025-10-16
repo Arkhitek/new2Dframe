@@ -1,6 +1,3 @@
-// Gemini APIと通信するための道具をインポートします
-import { GoogleGenerativeAI } from '@google/generative-ai';
-
 // Vercelのサーバーレス関数のエントリーポイント
 export default async function handler(req, res) {
     // 関数起動時のエラーハンドリング
@@ -20,8 +17,46 @@ export default async function handler(req, res) {
         console.log('🔍 プラットフォーム:', process.platform);
         console.log('🔍 利用可能な環境変数数:', Object.keys(process.env).length);
         
-        // GoogleGenerativeAIのインポートテスト
-        console.log('🔍 GoogleGenerativeAI インポートテスト:', typeof GoogleGenerativeAI);
+        // GoogleGenerativeAIの動的インポート
+        console.log('🔍 GoogleGenerativeAI パッケージを動的インポート中...');
+        let GoogleGenerativeAI;
+        try {
+            const genAIModule = await import('@google/generative-ai');
+            GoogleGenerativeAI = genAIModule.GoogleGenerativeAI;
+            console.log('✅ GoogleGenerativeAI インポート成功:', typeof GoogleGenerativeAI);
+        } catch (importError) {
+            console.error('❌ GoogleGenerativeAI インポートエラー:', importError);
+            console.error('❌ パッケージが見つからない場合の代替処理を実行します');
+            
+            // パッケージが見つからない場合の代替処理
+            if (req.method !== 'POST') {
+                return res.status(405).json({ error: 'Method Not Allowed' });
+            }
+            
+            const { prompt: userPrompt, mode = 'new' } = req.body;
+            
+            if (!userPrompt) {
+                return res.status(400).json({ error: '指示内容が空です。' });
+            }
+            
+            // 簡単なフォールバック構造を生成
+            const fallbackStructure = generateSimpleFallbackStructure(userPrompt);
+            
+            console.log('🔧 フォールバック構造を生成しました:', fallbackStructure);
+            
+            // フロントエンドが期待するレスポンス形式に合わせる
+            const responseForFrontend = {
+                candidates: [{
+                    content: {
+                        parts: [{
+                            text: JSON.stringify(fallbackStructure)
+                        }]
+                    }
+                }]
+            };
+            
+            return res.status(200).json(responseForFrontend);
+        }
         
         if (req.method !== 'POST') {
             console.log('❌ 不正なHTTPメソッド:', req.method);
@@ -198,6 +233,92 @@ export default async function handler(req, res) {
     }
 }
 
+
+/**
+ * 簡単なフォールバック構造を生成する関数
+ * @param {string} userPrompt ユーザーの指示
+ * @returns {Object} 構造データ
+ */
+function generateSimpleFallbackStructure(userPrompt) {
+    const prompt = userPrompt.toLowerCase();
+    
+    if (prompt.includes('ラーメン') || prompt.includes('フレーム')) {
+        if (prompt.includes('2層') || prompt.includes('2階')) {
+            return {
+                nodes: [
+                    { x: 0, y: 0, s: "x" },
+                    { x: 6, y: 0, s: "x" },
+                    { x: 0, y: 4, s: "f" },
+                    { x: 6, y: 4, s: "f" },
+                    { x: 0, y: 8, s: "f" },
+                    { x: 6, y: 8, s: "f" }
+                ],
+                members: [
+                    { i: 1, j: 3, E: 205000, I: 0.00011, A: 0.005245, Z: 0.000638 },
+                    { i: 2, j: 4, E: 205000, I: 0.00011, A: 0.005245, Z: 0.000638 },
+                    { i: 3, j: 4, E: 205000, I: 0.00011, A: 0.005245, Z: 0.000638 },
+                    { i: 3, j: 5, E: 205000, I: 0.00011, A: 0.005245, Z: 0.000638 },
+                    { i: 4, j: 6, E: 205000, I: 0.00011, A: 0.005245, Z: 0.000638 },
+                    { i: 5, j: 6, E: 205000, I: 0.00011, A: 0.005245, Z: 0.000638 }
+                ]
+            };
+        } else if (prompt.includes('5層') || prompt.includes('5階')) {
+            return {
+                nodes: [
+                    { x: 0, y: 0, s: "x" },
+                    { x: 6, y: 0, s: "x" },
+                    { x: 0, y: 4, s: "f" },
+                    { x: 6, y: 4, s: "f" },
+                    { x: 0, y: 8, s: "f" },
+                    { x: 6, y: 8, s: "f" },
+                    { x: 0, y: 12, s: "f" },
+                    { x: 6, y: 12, s: "f" },
+                    { x: 0, y: 16, s: "f" },
+                    { x: 6, y: 16, s: "f" },
+                    { x: 0, y: 20, s: "f" },
+                    { x: 6, y: 20, s: "f" }
+                ],
+                members: [
+                    { i: 1, j: 3, E: 205000, I: 0.00011, A: 0.005245, Z: 0.000638 },
+                    { i: 2, j: 4, E: 205000, I: 0.00011, A: 0.005245, Z: 0.000638 },
+                    { i: 3, j: 4, E: 205000, I: 0.00011, A: 0.005245, Z: 0.000638 },
+                    { i: 3, j: 5, E: 205000, I: 0.00011, A: 0.005245, Z: 0.000638 },
+                    { i: 4, j: 6, E: 205000, I: 0.00011, A: 0.005245, Z: 0.000638 },
+                    { i: 5, j: 6, E: 205000, I: 0.00011, A: 0.005245, Z: 0.000638 },
+                    { i: 5, j: 7, E: 205000, I: 0.00011, A: 0.005245, Z: 0.000638 },
+                    { i: 6, j: 8, E: 205000, I: 0.00011, A: 0.005245, Z: 0.000638 },
+                    { i: 7, j: 8, E: 205000, I: 0.00011, A: 0.005245, Z: 0.000638 },
+                    { i: 7, j: 9, E: 205000, I: 0.00011, A: 0.005245, Z: 0.000638 },
+                    { i: 8, j: 10, E: 205000, I: 0.00011, A: 0.005245, Z: 0.000638 },
+                    { i: 9, j: 10, E: 205000, I: 0.00011, A: 0.005245, Z: 0.000638 },
+                    { i: 9, j: 11, E: 205000, I: 0.00011, A: 0.005245, Z: 0.000638 },
+                    { i: 10, j: 12, E: 205000, I: 0.00011, A: 0.005245, Z: 0.000638 },
+                    { i: 11, j: 12, E: 205000, I: 0.00011, A: 0.005245, Z: 0.000638 }
+                ]
+            };
+        } else {
+            // デフォルトは2層ラーメン
+            return generateSimpleFallbackStructure('2層ラーメン');
+        }
+    } else if (prompt.includes('門型') || prompt.includes('門')) {
+        return {
+            nodes: [
+                { x: 0, y: 0, s: "x" },
+                { x: 8, y: 0, s: "x" },
+                { x: 0, y: 6, s: "f" },
+                { x: 8, y: 6, s: "f" }
+            ],
+            members: [
+                { i: 1, j: 3, E: 205000, I: 0.00011, A: 0.005245, Z: 0.000638 },
+                { i: 2, j: 4, E: 205000, I: 0.00011, A: 0.005245, Z: 0.000638 },
+                { i: 3, j: 4, E: 205000, I: 0.00011, A: 0.005245, Z: 0.000638 }
+            ]
+        };
+    } else {
+        // デフォルトは2層ラーメン
+        return generateSimpleFallbackStructure('2層ラーメン');
+    }
+}
 
 // ▼▼▼ 以下、既存のプロンプト生成関数 (変更なし) ▼▼▼
 

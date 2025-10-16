@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "build": "echo 'No build step required for static site'",
-    "dev": "echo 'Use netlify dev for local development'"
+    "dev": "echo 'Use netlify dev for local development'",
+    "vercel-build": "echo 'Vercel build completed'"
   },
   "dependencies": {
     "@google/generative-ai": "^0.21.0",
