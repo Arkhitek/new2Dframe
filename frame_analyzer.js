@@ -13456,6 +13456,84 @@ document.addEventListener('DOMContentLoaded', () => {
  * Gemini APIを使用して自然言語からモデルを生成するメイン関数
  * @param {string} userPrompt ユーザーが入力した指示
  */
+// AI生成キャンセル用のグローバル変数
+let aiGenerationCancelled = false;
+let aiGenerationAbortController = null;
+let aiGenerationPopup = null;
+
+// AI生成中のポップアップを表示する関数
+function showAIGenerationPopup() {
+    // 既存のポップアップがあれば削除
+    if (aiGenerationPopup) {
+        aiGenerationPopup.remove();
+    }
+
+    // ポップアップを作成
+    aiGenerationPopup = document.createElement('div');
+    aiGenerationPopup.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: white;
+        border: 2px solid #6f42c1;
+        border-radius: 8px;
+        padding: 20px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        z-index: 10000;
+        text-align: center;
+        min-width: 300px;
+    `;
+
+    aiGenerationPopup.innerHTML = `
+        <div style="margin-bottom: 15px;">
+            <div style="display: inline-block; width: 20px; height: 20px; border: 3px solid #f3f3f3; border-top: 3px solid #6f42c1; border-radius: 50%; animation: spin 1s linear infinite; margin-right: 10px;"></div>
+            <span style="font-size: 16px; font-weight: bold; color: #6f42c1;">AIでモデル生成中...</span>
+        </div>
+        <div style="margin-bottom: 15px; color: #666; font-size: 14px;">
+            しばらくお待ちください。生成が完了するまでこの画面が表示されます。
+        </div>
+        <button id="ai-cancel-btn" style="padding: 8px 20px; background-color: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">キャンセル</button>
+        <style>
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+        </style>
+    `;
+
+    // キャンセルボタンのイベントリスナーを追加
+    const cancelBtn = aiGenerationPopup.querySelector('#ai-cancel-btn');
+    cancelBtn.addEventListener('click', () => {
+        aiGenerationCancelled = true;
+        if (aiGenerationAbortController) {
+            aiGenerationAbortController.abort();
+        }
+        hideAIGenerationPopup();
+        
+        // ボタンの状態をリセット
+        const aiGenerateBtn = document.getElementById('generate-model-btn');
+        const aiStatus = document.getElementById('gemini-status-indicator');
+        if (aiGenerateBtn) {
+            aiGenerateBtn.disabled = false;
+            aiGenerateBtn.textContent = 'AIで生成';
+        }
+        if (aiStatus) {
+            aiStatus.style.display = 'none';
+        }
+    });
+
+    document.body.appendChild(aiGenerationPopup);
+}
+
+// AI生成中のポップアップを非表示にする関数
+function hideAIGenerationPopup() {
+    if (aiGenerationPopup) {
+        aiGenerationPopup.remove();
+        aiGenerationPopup = null;
+    }
+}
+
 async function generateModelWithAI(userPrompt, mode = 'new', retryCount = 0) {
     const aiGenerateBtn = document.getElementById('generate-model-btn');
     const aiStatus = document.getElementById('gemini-status-indicator');
@@ -13466,6 +13544,10 @@ async function generateModelWithAI(userPrompt, mode = 'new', retryCount = 0) {
         alert('AI生成ボタンが見つかりません。ページを再読み込みしてください。');
         return;
     }
+
+    // キャンセルフラグをリセット
+    aiGenerationCancelled = false;
+    aiGenerationAbortController = new AbortController();
     
     if (!aiStatus) {
         console.error('Error: Could not find element with id "gemini-status-indicator"');
@@ -13480,7 +13562,11 @@ async function generateModelWithAI(userPrompt, mode = 'new', retryCount = 0) {
 
     // UIを「生成中」の状態にします
     aiGenerateBtn.disabled = true;
+    aiGenerateBtn.textContent = '生成中...';
     aiStatus.style.display = 'block';
+    
+    // AI生成中のポップアップを表示
+    showAIGenerationPopup();
     
     // リトライ中の場合は特別なメッセージを表示
     if (retryCount > 0) {
@@ -13507,13 +13593,20 @@ async function generateModelWithAI(userPrompt, mode = 'new', retryCount = 0) {
 
         console.log(`🔍 AIリクエスト送信中... (リトライ: ${retryCount}/${MAX_RETRIES})`);
 
-        // APIリクエストを送信
+        // キャンセルチェック
+        if (aiGenerationCancelled) {
+            console.log('🔍 AI生成がキャンセルされました');
+            throw new Error('AI生成がキャンセルされました');
+        }
+
+        // APIリクエストを送信（AbortControllerを追加）
         const response = await fetch(API_URL, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify(requestBody),
+            signal: aiGenerationAbortController.signal
         });
 
         // 仲介役からの返答を受け取ります
@@ -13545,6 +13638,9 @@ async function generateModelWithAI(userPrompt, mode = 'new', retryCount = 0) {
         // 取り出したモデルデータを、アプリケーションのテーブルに反映させます
         applyGeneratedModel(modelData, userPrompt, mode);
 
+        // ポップアップを非表示にする
+        hideAIGenerationPopup();
+
         const successMessage = mode === 'edit' ? 'AIによるモデル編集が完了しました。' : 'AIによるモデル生成が完了しました。';
         if (retryCount > 0) {
             alert(`${successMessage} (${retryCount}回のリトライ後に成功)`);
@@ -13554,6 +13650,22 @@ async function generateModelWithAI(userPrompt, mode = 'new', retryCount = 0) {
 
     } catch (error) {
         console.error('AIモデル生成エラー:', error);
+        
+        // キャンセルされた場合は特別な処理
+        if (aiGenerationCancelled || (error.name === 'AbortError')) {
+            console.log('🔍 AI生成がキャンセルされました');
+            hideAIGenerationPopup();
+            
+            // UIをリセット
+            if (aiGenerateBtn) {
+                aiGenerateBtn.disabled = false;
+                aiGenerateBtn.textContent = 'AIで生成';
+            }
+            if (aiStatus) {
+                aiStatus.style.display = 'none';
+            }
+            return;
+        }
         
         // 容量超過エラーの場合はリトライを試行
         if (error.message && error.message.includes('Service tier capacity exceeded') && retryCount < MAX_RETRIES) {
@@ -13571,6 +13683,8 @@ async function generateModelWithAI(userPrompt, mode = 'new', retryCount = 0) {
         }
         
         // リトライ不可能またはリトライ上限に達した場合のエラー処理
+        hideAIGenerationPopup(); // ポップアップを非表示にする
+        
         if (aiStatus) {
             if (error && error.message) {
                 if (error.message.includes('Service tier capacity exceeded')) {
@@ -13613,6 +13727,7 @@ async function generateModelWithAI(userPrompt, mode = 'new', retryCount = 0) {
         // UIの状態を元に戻します
         if (aiGenerateBtn) {
             aiGenerateBtn.disabled = false;
+            aiGenerateBtn.textContent = 'AIで生成';
         }
         
         if (aiStatus) {
@@ -14151,13 +14266,6 @@ function setupAIModelGenerationListeners() {
         console.error('Error: Could not find element with id "generate-model-btn"');
     }
     
-    // 現在のモデル確認ボタンのイベントリスナー
-    const previewBtn = document.getElementById('preview-current-model-btn');
-    if (previewBtn) {
-        previewBtn.addEventListener('click', () => {
-            previewCurrentModel();
-        });
-    }
     
     // モード切り替えのイベントリスナー
     const modeRadios = document.getElementsByName('ai-generation-mode');
@@ -14178,7 +14286,6 @@ function updateModeDescription() {
     const modeRadios = document.getElementsByName('ai-generation-mode');
     const selectedMode = Array.from(modeRadios).find(radio => radio.checked)?.value || 'new';
     const descriptionElement = document.getElementById('mode-description');
-    const previewBtn = document.getElementById('preview-current-model-btn');
     
     if (!descriptionElement) {
         console.error('Error: Could not find element with id "mode-description"');
@@ -14187,10 +14294,8 @@ function updateModeDescription() {
     
     if (selectedMode === 'new') {
         descriptionElement.textContent = '作成したい構造モデルを自然言語で入力してください。(例: 高さ5m、スパン10mの門型ラーメン。柱脚は固定。)';
-        if (previewBtn) previewBtn.style.display = 'none';
     } else if (selectedMode === 'edit') {
         descriptionElement.textContent = '現在のモデルに対して追加・編集したい内容を自然言語で入力してください。(例: 2階部分を追加、梁の断面をH-300x150に変更)';
-        if (previewBtn) previewBtn.style.display = 'inline-block';
     }
 }
 
