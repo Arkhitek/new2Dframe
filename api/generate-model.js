@@ -9,15 +9,28 @@ export default async function handler(req, res) {
 
     try {
         const { prompt: userPrompt, mode = 'new', currentModel } = req.body;
+        
+        // リクエストボディの検証を強化
+        console.log('🔍 APIリクエスト受信:', { 
+            hasPrompt: !!userPrompt, 
+            mode, 
+            hasCurrentModel: !!currentModel,
+            promptLength: userPrompt ? userPrompt.length : 0
+        });
+        
         if (!userPrompt) {
+            console.error('❌ エラー: 指示内容が空です');
             return res.status(400).json({ error: '指示内容が空です。' });
         }
 
         // ▼▼▼【変更点 1】APIキーの環境変数名を変更 ▼▼▼
         const API_KEY = process.env.GEMINI_API_KEY;
         if (!API_KEY) {
-            throw new Error("Gemini APIのキーがサーバーに設定されていません。");
+            console.error('❌ エラー: Gemini APIキーが設定されていません');
+            throw new Error("Gemini APIのキーがサーバーに設定されていません。環境変数GEMINI_API_KEYを確認してください。");
         }
+        
+        console.log('✅ Gemini APIキーが確認されました');
         
         // ▼▼▼【変更点 2】Gemini APIクライアントを初期化 ▼▼▼
         const genAI = new GoogleGenerativeAI(API_KEY);
@@ -33,15 +46,20 @@ export default async function handler(req, res) {
         // システムプロンプトとユーザープロンプトを結合
         const fullPrompt = `${systemPrompt}\n\nユーザーの指示: "${userMessage}"`;
         
+        console.log('🔍 Gemini APIに送信するプロンプト長:', fullPrompt.length);
 
         // ▼▼▼【変更点 4】Mistral API呼び出しをGemini API呼び出しに置き換え ▼▼▼
+        console.log('🚀 Gemini APIを呼び出し中...');
         const result = await model.generateContent(fullPrompt);
         const response = await result.response;
         
         if (!response) {
+            console.error('❌ エラー: Gemini AIから予期しない形式のレスポンス');
             throw new Error("Gemini AIから予期しない形式のレスポンスがありました。");
         }
+        
         const generatedText = response.text();
+        console.log('✅ Gemini APIからの応答を受信:', generatedText.length, '文字');
 
         // フロントエンドが期待するレスポンス形式に合わせる
         const responseForFrontend = {
@@ -54,19 +72,41 @@ export default async function handler(req, res) {
             }]
         };
 
+        console.log('✅ レスポンスをフロントエンドに送信中...');
         res.status(200).json(responseForFrontend);
 
     } catch (error) {
-        console.error('サーバーレス関数エラー:', error);
+        console.error('❌ サーバーレス関数エラー:', error);
+        console.error('❌ エラーの詳細:', {
+            name: error.name,
+            message: error.message,
+            stack: error.stack
+        });
+        
         let errorMessage = 'AIモデルの生成に失敗しました。';
+        let statusCode = 500;
+        
         if (error.message.includes('SAFETY')) {
             errorMessage = '安全性の設定により、応答がブロックされました。より一般的な表現で試してください。';
+            statusCode = 400;
+        } else if (error.message.includes('APIのキーがサーバーに設定されていません')) {
+            errorMessage = 'AIサービスの設定に問題があります。管理者にお問い合わせください。';
+            statusCode = 503;
+        } else if (error.message.includes('quota') || error.message.includes('limit')) {
+            errorMessage = 'AIサービスの利用制限に達しました。しばらく時間をおいてから再度お試しください。';
+            statusCode = 429;
+        } else if (error.message.includes('network') || error.message.includes('timeout')) {
+            errorMessage = 'ネットワークエラーが発生しました。接続を確認して再度お試しください。';
+            statusCode = 503;
         } else if (error instanceof SyntaxError) {
-             errorMessage = 'AIからの応答が不正な形式でした。少し表現を変えて再度試してください。';
+            errorMessage = 'AIからの応答が不正な形式でした。少し表現を変えて再度試してください。';
+            statusCode = 400;
         } else {
-            errorMessage = error.message;
+            errorMessage = error.message || '予期しないエラーが発生しました。';
         }
-        res.status(500).json({ error: errorMessage });
+        
+        console.error('❌ エラーレスポンス送信:', { statusCode, errorMessage });
+        res.status(statusCode).json({ error: errorMessage });
     }
 }
 

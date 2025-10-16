@@ -13650,14 +13650,51 @@ async function generateModelWithAIInternal(userPrompt, mode = 'new', retryCount 
         // 返答に問題があった場合のエラー処理
         if (!response.ok) {
             let errorMessage = 'サーバーでエラーが発生しました。';
+            let shouldRetry = false;
             
             if (response.status === 500) {
                 errorMessage = 'サーバー内部エラーが発生しました。';
                 if (data.error) {
                     errorMessage = data.error;
                 }
+                // 500エラーは一時的な可能性があるためリトライを検討
+                shouldRetry = retryCount < MAX_RETRIES;
+            } else if (response.status === 429) {
+                errorMessage = 'AIサービスの利用制限に達しました。しばらく時間をおいてから再度お試しください。';
+                if (data.error) {
+                    errorMessage = data.error;
+                }
+                // レート制限は時間をおいてリトライ
+                shouldRetry = retryCount < MAX_RETRIES;
+            } else if (response.status === 503) {
+                errorMessage = 'AIサービスが一時的に利用できません。しばらく時間をおいてから再度お試しください。';
+                if (data.error) {
+                    errorMessage = data.error;
+                }
+                // サービス利用不可はリトライを検討
+                shouldRetry = retryCount < MAX_RETRIES;
+            } else if (response.status === 400) {
+                errorMessage = 'リクエストに問題があります。';
+                if (data.error) {
+                    errorMessage = data.error;
+                }
+                // 400エラーは通常リトライしない
+                shouldRetry = false;
             } else if (data.error) {
                 errorMessage = data.error;
+            }
+            
+            // リトライ可能なエラーでリトライ回数が上限に達していない場合
+            if (shouldRetry && retryCount < MAX_RETRIES) {
+                console.log(`🔄 ${response.status}エラーのためリトライします (${retryCount + 1}/${MAX_RETRIES})`);
+                
+                // リトライ前の待機時間を計算（指数バックオフ）
+                const delay = Math.min(BASE_DELAY * Math.pow(2, retryCount), MAX_DELAY);
+                console.log(`⏳ ${delay}ms待機してからリトライします...`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                
+                // リトライ実行
+                return generateModelWithAIInternal(userPrompt, mode, retryCount + 1);
             }
             
             throw new Error(errorMessage);
@@ -13762,12 +13799,45 @@ async function generateModelWithAIInternal(userPrompt, mode = 'new', retryCount 
             }
         }
         
-        // ユーザーへの通知（AI生成中はアラートを表示しない）
+        // エラーメッセージをユーザーフレンドリーに変換
+        let userFriendlyMessage = 'AIモデルの生成に失敗しました。';
+        
         if (error && error.message) {
+            if (error.message.includes('サーバーエラー: 500')) {
+                userFriendlyMessage = 'サーバーで一時的なエラーが発生しました。しばらく時間をおいてから再度お試しください。';
+            } else if (error.message.includes('サーバーエラー: 429')) {
+                userFriendlyMessage = 'AIサービスの利用制限に達しました。しばらく時間をおいてから再度お試しください。';
+            } else if (error.message.includes('サーバーエラー: 503')) {
+                userFriendlyMessage = 'AIサービスが一時的に利用できません。しばらく時間をおいてから再度お試しください。';
+            } else if (error.message.includes('サーバーエラー: 400')) {
+                userFriendlyMessage = 'リクエストに問題があります。指示内容を確認して再度お試しください。';
+            } else if (error.message.includes('サーバーからのレスポンスが有効なJSONではありません')) {
+                userFriendlyMessage = 'サーバーからの応答に問題があります。しばらく時間をおいてから再度お試しください。';
+            } else if (error.message.includes('APIからのレスポンスが空です')) {
+                userFriendlyMessage = 'AIからの応答が空でした。指示内容を変更して再度お試しください。';
+            } else if (error.message.includes('APIからのレスポンス形式が不正です')) {
+                userFriendlyMessage = 'AIからの応答形式に問題があります。指示内容を変更して再度お試しください。';
+            } else if (error.message.includes('レスポンス内に有効なJSONオブジェクトが見つかりません')) {
+                userFriendlyMessage = 'AIが適切な構造データを生成できませんでした。より具体的な指示で再度お試しください。';
+            } else if (error.message.includes('抽出されたJSON文字列が無効です')) {
+                userFriendlyMessage = 'AIが生成したデータに問題があります。指示内容を変更して再度お試しください。';
+            } else if (error.message.includes('Service tier capacity exceeded')) {
+                userFriendlyMessage = 'AIサービスの利用制限に達しました。しばらく時間をおいてから再度お試しください。';
+            } else if (error.message.includes('ネットワーク')) {
+                userFriendlyMessage = 'ネットワーク接続に問題があります。インターネット接続を確認して再度お試しください。';
+            } else if (error.message.includes('タイムアウト')) {
+                userFriendlyMessage = '処理に時間がかかりすぎました。より簡単な指示で再度お試しください。';
+            } else {
+                userFriendlyMessage = error.message;
+            }
+            
             console.error(`AIによるモデル生成に失敗しました。エラー: ${error.message}`);
         } else {
             console.error(`AIによるモデル生成に失敗しました。`);
         }
+        
+        // ユーザーへの通知（AI生成中はアラートを表示しない）
+        safeAlert(`❌ ${userFriendlyMessage}\n\n${retryCount > 0 ? `(${retryCount}回のリトライ後に失敗)` : ''}`);
     } finally {
         // UIの状態を元に戻します
         isAIGenerationInProgress = false; // 最終的にフラグをリセット
