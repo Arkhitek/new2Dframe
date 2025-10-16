@@ -13461,6 +13461,8 @@ let aiGenerationCancelled = false;
 let aiGenerationAbortController = null;
 let aiGenerationPopup = null;
 let isAIGenerationInProgress = false; // AI生成中のフラグ
+let autoRetryCount = 0; // 自動再試行回数
+const MAX_AUTO_RETRY = 5; // 自動再試行の最大回数
 
 // AI生成中のポップアップを表示する関数
 function showAIGenerationPopup() {
@@ -13553,7 +13555,8 @@ function safeConfirm(message) {
     return confirm(message);
 }
 
-async function generateModelWithAI(userPrompt, mode = 'new', retryCount = 0) {
+// 内部関数：ポップアップ表示なしでAI生成を実行
+async function generateModelWithAIInternal(userPrompt, mode = 'new', retryCount = 0) {
     const aiGenerateBtn = document.getElementById('generate-model-btn');
     const aiStatus = document.getElementById('gemini-status-indicator');
 
@@ -13564,11 +13567,6 @@ async function generateModelWithAI(userPrompt, mode = 'new', retryCount = 0) {
         return;
     }
 
-    // キャンセルフラグをリセット
-    aiGenerationCancelled = false;
-    aiGenerationAbortController = new AbortController();
-    isAIGenerationInProgress = true; // AI生成開始フラグ
-    
     if (!aiStatus) {
         console.error('Error: Could not find element with id "gemini-status-indicator"');
         safeAlert('AIステータス表示要素が見つかりません。ページを再読み込みしてください。');
@@ -13697,8 +13695,16 @@ async function generateModelWithAI(userPrompt, mode = 'new', retryCount = 0) {
             // リトライ前に少し待機
             await new Promise(resolve => setTimeout(resolve, delay));
             
-            // リトライ実行
-            return generateModelWithAI(userPrompt, mode, retryCount + 1);
+            // キャンセルチェック（リトライ前）
+            if (aiGenerationCancelled) {
+                console.log('🔍 リトライ前にAI生成がキャンセルされました');
+                hideAIGenerationPopup();
+                isAIGenerationInProgress = false;
+                return;
+            }
+            
+            // リトライ実行（ポップアップは再表示しない）
+            return generateModelWithAIInternal(userPrompt, mode, retryCount + 1);
         }
         
         // リトライ不可能またはリトライ上限に達した場合のエラー処理
@@ -13708,22 +13714,34 @@ async function generateModelWithAI(userPrompt, mode = 'new', retryCount = 0) {
         if (aiStatus) {
             if (error && error.message) {
                 if (error.message.includes('Service tier capacity exceeded')) {
-                    aiStatus.innerHTML = '❌ AIサービスが一時的に利用できません。<br><button id="manual-retry-btn" style="margin-top: 5px; padding: 5px 10px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer;">再試行</button>';
+                    // 容量超過エラーの場合は自動再試行を実行
+                    if (autoRetryCount < MAX_AUTO_RETRY) {
+                        aiStatus.textContent = `❌ AIサービスが一時的に利用できません。自動再試行中... (${autoRetryCount + 1}/${MAX_AUTO_RETRY})`;
+                        aiStatus.style.color = '#ffc107';
+                        
+                        console.log(`🔄 容量超過エラーによる自動再試行を実行します (${autoRetryCount + 1}/${MAX_AUTO_RETRY})`);
+                        
+                        // 少し待機してから自動再試行
+                        setTimeout(() => {
+                            if (!aiGenerationCancelled) {
+                                autoRetryCount++;
+                                console.log(`🔄 自動再試行を開始します (${autoRetryCount}/${MAX_AUTO_RETRY})`);
+                                generateModelWithAI(userPrompt, mode, 0); // リトライカウントをリセット
+                            }
+                        }, 5000); // 5秒後に自動再試行
+                    } else {
+                        // 自動再試行上限に達した場合
+                        aiStatus.textContent = '❌ AIサービスが一時的に利用できません。しばらく時間をおいてから再度お試しください。';
+                        aiStatus.style.color = '#dc3545';
+                        console.log('🔄 自動再試行上限に達しました');
+                    }
                 } else {
                     aiStatus.textContent = `❌ エラー: ${error.message}`;
+                    aiStatus.style.color = '#dc3545';
                 }
             } else {
                 aiStatus.textContent = `❌ AIによるモデル生成に失敗しました。`;
-            }
-            aiStatus.style.color = '#dc3545';
-            
-            // 手動リトライボタンのイベントリスナーを設定
-            const manualRetryBtn = document.getElementById('manual-retry-btn');
-            if (manualRetryBtn) {
-                manualRetryBtn.addEventListener('click', () => {
-                    console.log('🔄 手動リトライが実行されました');
-                    generateModelWithAI(userPrompt, mode, 0); // リトライカウントをリセット
-                });
+                aiStatus.style.color = '#dc3545';
             }
         }
         
@@ -13751,6 +13769,27 @@ async function generateModelWithAI(userPrompt, mode = 'new', retryCount = 0) {
             }, 5000);
         }
     }
+}
+
+// 公開関数：最初の呼び出し時にポップアップを表示
+async function generateModelWithAI(userPrompt, mode = 'new', retryCount = 0) {
+    // キャンセルフラグをリセット
+    aiGenerationCancelled = false;
+    aiGenerationAbortController = new AbortController();
+    isAIGenerationInProgress = true; // AI生成開始フラグ
+    
+    // 手動開始時は自動再試行カウントをリセット
+    if (retryCount === 0) {
+        autoRetryCount = 0; // 手動開始時は自動再試行カウントをリセット
+    }
+    
+    // ポップアップを表示（最初の呼び出し時のみ）
+    if (retryCount === 0) {
+        showAIGenerationPopup();
+    }
+    
+    // 内部関数を呼び出し
+    return generateModelWithAIInternal(userPrompt, mode, retryCount);
 }
 
 /**
