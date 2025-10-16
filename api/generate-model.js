@@ -3,17 +3,30 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 
 // Vercelのサーバーレス関数のエントリーポイント
 export default async function handler(req, res) {
-    console.log('🚀 Vercel関数が呼び出されました:', {
-        method: req.method,
-        url: req.url,
-        headers: req.headers,
-        body: req.body ? 'Body exists' : 'No body'
-    });
-    
-    if (req.method !== 'POST') {
-        console.log('❌ 不正なHTTPメソッド:', req.method);
-        return res.status(405).json({ error: 'Method Not Allowed' });
-    }
+    // 関数起動時のエラーハンドリング
+    try {
+        console.log('🚀 Vercel関数が呼び出されました:', {
+            method: req.method,
+            url: req.url,
+            headers: req.headers,
+            body: req.body ? 'Body exists' : 'No body',
+            nodeVersion: process.version,
+            platform: process.platform
+        });
+        
+        // 基本的な環境チェック
+        console.log('🔍 環境チェック開始...');
+        console.log('🔍 Node.js バージョン:', process.version);
+        console.log('🔍 プラットフォーム:', process.platform);
+        console.log('🔍 利用可能な環境変数数:', Object.keys(process.env).length);
+        
+        // GoogleGenerativeAIのインポートテスト
+        console.log('🔍 GoogleGenerativeAI インポートテスト:', typeof GoogleGenerativeAI);
+        
+        if (req.method !== 'POST') {
+            console.log('❌ 不正なHTTPメソッド:', req.method);
+            return res.status(405).json({ error: 'Method Not Allowed' });
+        }
 
     try {
         const { prompt: userPrompt, mode = 'new', currentModel } = req.body;
@@ -164,6 +177,23 @@ export default async function handler(req, res) {
             res.status(statusCode).json({ error: errorMessage });
         } catch (responseError) {
             console.error('❌ レスポンス送信エラー:', responseError);
+        }
+    } catch (startupError) {
+        // 関数起動時のエラー（インポートエラーなど）
+        console.error('❌ 関数起動時エラー:', startupError);
+        console.error('❌ 起動エラーの詳細:', {
+            name: startupError.name,
+            message: startupError.message,
+            stack: startupError.stack
+        });
+        
+        try {
+            res.status(500).json({ 
+                error: 'サーバー関数の起動に失敗しました。',
+                details: startupError.message 
+            });
+        } catch (responseError) {
+            console.error('❌ 起動エラーレスポンス送信失敗:', responseError);
         }
     }
 }
