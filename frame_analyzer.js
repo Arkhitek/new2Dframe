@@ -13897,7 +13897,7 @@ function getCurrentModelData() {
         if (elements.nodeLoadsTable.rows.length > 0) {
             console.log('🔍 節点荷重テーブル第1行のセル数:', elements.nodeLoadsTable.rows[0]?.cells?.length);
             console.log('🔍 節点荷重テーブル第1行の内容:', 
-                elements.nodeLoadsTable.rows[0]?.cells?.map(cell => cell?.textContent?.trim()).join(' | '));
+                Array.from(elements.nodeLoadsTable.rows[0]?.cells || []).map(cell => cell?.textContent?.trim()).join(' | '));
         }
         
         for (let i = 0; i < elements.nodeLoadsTable.rows.length; i++) {
@@ -13961,7 +13961,7 @@ function getCurrentModelData() {
         if (elements.memberLoadsTable.rows.length > 0) {
             console.log('🔍 部材荷重テーブル第1行のセル数:', elements.memberLoadsTable.rows[0]?.cells?.length);
             console.log('🔍 部材荷重テーブル第1行の内容:', 
-                elements.memberLoadsTable.rows[0]?.cells?.map(cell => cell?.textContent?.trim()).join(' | '));
+                Array.from(elements.memberLoadsTable.rows[0]?.cells || []).map(cell => cell?.textContent?.trim()).join(' | '));
         }
         
         for (let i = 0; i < elements.memberLoadsTable.rows.length; i++) {
