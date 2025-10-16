@@ -1,0 +1,11 @@
+{
+  "functions": {
+    "api/generate-model.js": {
+      "runtime": "nodejs18.x",
+      "maxDuration": 30
+    }
+  },
+  "env": {
+    "GEMINI_API_KEY": "@gemini_api_key"
+  }
+}

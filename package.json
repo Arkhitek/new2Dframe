@@ -3,11 +3,13 @@
   "version": "1.0.0",
   "description": "2D構造解析システム with AI Model Generation",
   "main": "index.html",
+  "type": "module",
   "scripts": {
     "build": "echo 'No build step required for static site'",
     "dev": "echo 'Use netlify dev for local development'"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.21.0",
     "google-auth-library": "^10.4.0",
     "node-fetch": "^2.6.7"
   },

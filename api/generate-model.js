@@ -1,9 +1,17 @@
 // Gemini APIと通信するための道具をインポートします
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 // Vercelのサーバーレス関数のエントリーポイント
 export default async function handler(req, res) {
+    console.log('🚀 Vercel関数が呼び出されました:', {
+        method: req.method,
+        url: req.url,
+        headers: req.headers,
+        body: req.body ? 'Body exists' : 'No body'
+    });
+    
     if (req.method !== 'POST') {
+        console.log('❌ 不正なHTTPメソッド:', req.method);
         return res.status(405).json({ error: 'Method Not Allowed' });
     }
 
@@ -24,34 +32,70 @@ export default async function handler(req, res) {
         }
 
         // ▼▼▼【変更点 1】APIキーの環境変数名を変更 ▼▼▼
+        console.log('🔍 環境変数をチェック中...');
+        console.log('🔍 利用可能な環境変数:', Object.keys(process.env).filter(key => key.includes('GEMINI') || key.includes('API')));
+        
         const API_KEY = process.env.GEMINI_API_KEY;
+        console.log('🔍 GEMINI_API_KEYの存在:', !!API_KEY);
+        console.log('🔍 GEMINI_API_KEYの長さ:', API_KEY ? API_KEY.length : 0);
+        
         if (!API_KEY) {
             console.error('❌ エラー: Gemini APIキーが設定されていません');
+            console.error('❌ 環境変数GEMINI_API_KEYが設定されていません');
+            console.error('❌ Vercelの環境変数設定を確認してください');
             throw new Error("Gemini APIのキーがサーバーに設定されていません。環境変数GEMINI_API_KEYを確認してください。");
         }
         
         console.log('✅ Gemini APIキーが確認されました');
         
         // ▼▼▼【変更点 2】Gemini APIクライアントを初期化 ▼▼▼
+        console.log('🔍 GoogleGenerativeAIクライアントを初期化中...');
         const genAI = new GoogleGenerativeAI(API_KEY);
+        console.log('✅ GoogleGenerativeAIクライアント初期化完了');
+        
+        console.log('🔍 Geminiモデルを取得中...');
         const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+        console.log('✅ Geminiモデル取得完了');
 
         // ▼▼▼【変更点 3】プロンプトを結合して単一のテキストにする ▼▼▼
         // (既存のプロンプト生成ロジックはそのまま利用します)
+        console.log('🔍 システムプロンプトを生成中...');
         const systemPrompt = createSystemPromptForBackend(mode, currentModel);
+        console.log('✅ システムプロンプト生成完了');
+        
         let userMessage = userPrompt;
         if (mode === 'edit' && currentModel) {
+            console.log('🔍 編集プロンプトを生成中...');
             userMessage = createEditPrompt(userPrompt, currentModel);
+            console.log('✅ 編集プロンプト生成完了');
         }
+        
         // システムプロンプトとユーザープロンプトを結合
         const fullPrompt = `${systemPrompt}\n\nユーザーの指示: "${userMessage}"`;
         
         console.log('🔍 Gemini APIに送信するプロンプト長:', fullPrompt.length);
+        console.log('🔍 プロンプトの最初の500文字:', fullPrompt.substring(0, 500));
 
         // ▼▼▼【変更点 4】Mistral API呼び出しをGemini API呼び出しに置き換え ▼▼▼
         console.log('🚀 Gemini APIを呼び出し中...');
-        const result = await model.generateContent(fullPrompt);
-        const response = await result.response;
+        let result, response;
+        
+        try {
+            result = await model.generateContent(fullPrompt);
+            console.log('✅ Gemini API呼び出し成功');
+            
+            response = await result.response;
+            console.log('✅ Gemini APIレスポンス取得成功');
+        } catch (apiError) {
+            console.error('❌ Gemini API呼び出しエラー:', apiError);
+            console.error('❌ APIエラーの詳細:', {
+                name: apiError.name,
+                message: apiError.message,
+                code: apiError.code,
+                status: apiError.status
+            });
+            throw apiError;
+        }
         
         if (!response) {
             console.error('❌ エラー: Gemini AIから予期しない形式のレスポンス');
@@ -80,7 +124,9 @@ export default async function handler(req, res) {
         console.error('❌ エラーの詳細:', {
             name: error.name,
             message: error.message,
-            stack: error.stack
+            stack: error.stack,
+            code: error.code,
+            status: error.status
         });
         
         let errorMessage = 'AIモデルの生成に失敗しました。';
@@ -92,12 +138,18 @@ export default async function handler(req, res) {
         } else if (error.message.includes('APIのキーがサーバーに設定されていません')) {
             errorMessage = 'AIサービスの設定に問題があります。管理者にお問い合わせください。';
             statusCode = 503;
-        } else if (error.message.includes('quota') || error.message.includes('limit')) {
+        } else if (error.message.includes('quota') || error.message.includes('limit') || error.message.includes('QUOTA_EXCEEDED')) {
             errorMessage = 'AIサービスの利用制限に達しました。しばらく時間をおいてから再度お試しください。';
             statusCode = 429;
-        } else if (error.message.includes('network') || error.message.includes('timeout')) {
+        } else if (error.message.includes('network') || error.message.includes('timeout') || error.message.includes('NETWORK_ERROR')) {
             errorMessage = 'ネットワークエラーが発生しました。接続を確認して再度お試しください。';
             statusCode = 503;
+        } else if (error.message.includes('PERMISSION_DENIED') || error.message.includes('API_KEY_INVALID')) {
+            errorMessage = 'AIサービスの認証に問題があります。管理者にお問い合わせください。';
+            statusCode = 401;
+        } else if (error.message.includes('RESOURCE_EXHAUSTED')) {
+            errorMessage = 'AIサービスのリソースが不足しています。しばらく時間をおいてから再度お試しください。';
+            statusCode = 429;
         } else if (error instanceof SyntaxError) {
             errorMessage = 'AIからの応答が不正な形式でした。少し表現を変えて再度試してください。';
             statusCode = 400;
@@ -106,7 +158,13 @@ export default async function handler(req, res) {
         }
         
         console.error('❌ エラーレスポンス送信:', { statusCode, errorMessage });
-        res.status(statusCode).json({ error: errorMessage });
+        
+        // Vercelの関数が正常に終了するようにレスポンスを送信
+        try {
+            res.status(statusCode).json({ error: errorMessage });
+        } catch (responseError) {
+            console.error('❌ レスポンス送信エラー:', responseError);
+        }
     }
 }
 
