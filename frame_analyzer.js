@@ -13906,13 +13906,33 @@ function getCurrentModelData() {
             console.log('🔍 節点荷重テーブル第1行のセル数:', elements.nodeLoadsTable.rows[0]?.cells?.length);
             console.log('🔍 節点荷重テーブル第1行の内容:', 
                 Array.from(elements.nodeLoadsTable.rows[0]?.cells || []).map(cell => cell?.textContent?.trim()).join(' | '));
+            
+            // 各セルの詳細を確認
+            Array.from(elements.nodeLoadsTable.rows[0]?.cells || []).forEach((cell, index) => {
+                console.log(`🔍 節点荷重テーブル第1行セル${index}:`, {
+                    textContent: cell?.textContent?.trim(),
+                    innerHTML: cell?.innerHTML?.trim(),
+                    hasInput: cell?.querySelector('input') !== null,
+                    inputValue: cell?.querySelector('input')?.value
+                });
+            });
         }
         
         for (let i = 0; i < elements.nodeLoadsTable.rows.length; i++) {
             const row = elements.nodeLoadsTable.rows[i];
             
+            console.log(`🔍 節点荷重テーブル行${i}の詳細:`, {
+                hasRow: !!row,
+                hasCells: !!row?.cells,
+                cellCount: row?.cells?.length,
+                firstCellText: row?.cells?.[0]?.textContent?.trim(),
+                firstCellHTML: row?.cells?.[0]?.innerHTML?.trim(),
+                hasInputs: Array.from(row?.cells || []).map(cell => cell?.querySelector('input') !== null)
+            });
+            
             // 行とセルが存在するかチェック
             if (!row || !row.cells || row.cells.length < 4) {
+                console.log(`🔍 節点荷重テーブル行${i}: スキップ（セル不足）`);
                 continue;
             }
             
@@ -13925,6 +13945,7 @@ function getCurrentModelData() {
                             firstCellText.includes('番号');
             
             if (isHeader) {
+                console.log(`🔍 節点荷重テーブル行${i}: スキップ（ヘッダー行）`);
                 continue;
             }
             
@@ -13970,13 +13991,33 @@ function getCurrentModelData() {
             console.log('🔍 部材荷重テーブル第1行のセル数:', elements.memberLoadsTable.rows[0]?.cells?.length);
             console.log('🔍 部材荷重テーブル第1行の内容:', 
                 Array.from(elements.memberLoadsTable.rows[0]?.cells || []).map(cell => cell?.textContent?.trim()).join(' | '));
+            
+            // 各セルの詳細を確認
+            Array.from(elements.memberLoadsTable.rows[0]?.cells || []).forEach((cell, index) => {
+                console.log(`🔍 部材荷重テーブル第1行セル${index}:`, {
+                    textContent: cell?.textContent?.trim(),
+                    innerHTML: cell?.innerHTML?.trim(),
+                    hasInput: cell?.querySelector('input') !== null,
+                    inputValue: cell?.querySelector('input')?.value
+                });
+            });
         }
         
         for (let i = 0; i < elements.memberLoadsTable.rows.length; i++) {
             const row = elements.memberLoadsTable.rows[i];
             
+            console.log(`🔍 部材荷重テーブル行${i}の詳細:`, {
+                hasRow: !!row,
+                hasCells: !!row?.cells,
+                cellCount: row?.cells?.length,
+                firstCellText: row?.cells?.[0]?.textContent?.trim(),
+                firstCellHTML: row?.cells?.[0]?.innerHTML?.trim(),
+                hasInputs: Array.from(row?.cells || []).map(cell => cell?.querySelector('input') !== null)
+            });
+            
             // 行とセルが存在するかチェック
             if (!row || !row.cells || row.cells.length < 2) {
+                console.log(`🔍 部材荷重テーブル行${i}: スキップ（セル不足）`);
                 continue;
             }
             
@@ -13989,6 +14030,7 @@ function getCurrentModelData() {
                             firstCellText.includes('番号');
             
             if (isHeader) {
+                console.log(`🔍 部材荷重テーブル行${i}: スキップ（ヘッダー行）`);
                 continue;
             }
             
