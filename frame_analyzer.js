@@ -13936,13 +13936,16 @@ function getCurrentModelData() {
                 continue;
             }
             
-            // ヘッダー行の識別
+            // ヘッダー行の識別（より厳密に）
             const firstCellText = row.cells[0]?.textContent?.trim();
-            const isHeader = !firstCellText || 
-                            isNaN(parseInt(firstCellText)) || 
+            const firstCellInput = row.cells[0]?.querySelector('input');
+            
+            // input要素がない場合のみヘッダー行と判定
+            const isHeader = !firstCellInput || 
                             firstCellText.includes('節点') || 
                             firstCellText.includes('Node') ||
-                            firstCellText.includes('番号');
+                            firstCellText.includes('番号') ||
+                            firstCellText.includes('#');
             
             if (isHeader) {
                 console.log(`🔍 節点荷重テーブル行${i}: スキップ（ヘッダー行）`);
@@ -13955,6 +13958,7 @@ function getCurrentModelData() {
             const mzInput = row.cells[3]?.querySelector('input');
             
             if (!nodeInput || !fxInput || !fyInput || !mzInput) {
+                console.log(`🔍 節点荷重テーブル行${i}: スキップ（input要素不足）`);
                 continue;
             }
             
@@ -14021,13 +14025,16 @@ function getCurrentModelData() {
                 continue;
             }
             
-            // ヘッダー行の識別
+            // ヘッダー行の識別（より厳密に）
             const firstCellText = row.cells[0]?.textContent?.trim();
-            const isHeader = !firstCellText || 
-                            isNaN(parseInt(firstCellText)) || 
+            const firstCellInput = row.cells[0]?.querySelector('input');
+            
+            // input要素がない場合のみヘッダー行と判定
+            const isHeader = !firstCellInput || 
                             firstCellText.includes('部材') || 
                             firstCellText.includes('Member') ||
-                            firstCellText.includes('番号');
+                            firstCellText.includes('番号') ||
+                            firstCellText.includes('#');
             
             if (isHeader) {
                 console.log(`🔍 部材荷重テーブル行${i}: スキップ（ヘッダー行）`);
@@ -14038,6 +14045,7 @@ function getCurrentModelData() {
             const wInput = row.cells[1]?.querySelector('input');
             
             if (!memberInput || !wInput) {
+                console.log(`🔍 部材荷重テーブル行${i}: スキップ（input要素不足）`);
                 continue;
             }
             
