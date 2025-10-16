@@ -13651,8 +13651,7 @@ function extractJsonFromResponse(apiResponse) {
  * @returns {Object} 現在のモデルデータ
  */
 function getCurrentModelData() {
-    console.log('🔍 現在のモデル情報を取得中...');
-    console.log('🔍 新しいデバッグ機能が実行されています - バージョン2');
+    console.log('🔍 現在のモデル情報を完全取得中...');
     
     // Check if elements object exists
     if (!elements) {
@@ -13744,14 +13743,26 @@ function getCurrentModelData() {
             
             console.log(`🔍 節点 ${nodeNumber} の座標: (${x}, ${y}), 境界条件: ${support}`);
             
+            // 強制変位・回転の取得
+            const dxInput = row.cells[4]?.querySelector('input');
+            const dyInput = row.cells[5]?.querySelector('input');
+            const drInput = row.cells[6]?.querySelector('input');
+            
+            const dx_forced = dxInput ? parseFloat(dxInput.value) || 0 : 0;
+            const dy_forced = dyInput ? parseFloat(dyInput.value) || 0 : 0;
+            const r_forced = drInput ? parseFloat(drInput.value) || 0 : 0;
+            
             // 座標が有効な場合のみ追加
             if (!isNaN(x) && !isNaN(y)) {
                 const nodeData = {
                     x: x,
                     y: y,
-                    s: support
+                    s: support,
+                    dx_forced: dx_forced,
+                    dy_forced: dy_forced,
+                    r_forced: r_forced
                 };
-                console.log(`🔍 節点 ${nodeNumber} データ取得:`, nodeData);
+                console.log(`🔍 節点 ${nodeNumber} 完全データ取得:`, nodeData);
                 nodes.push(nodeData);
             }
         }
@@ -13828,14 +13839,50 @@ function getCurrentModelData() {
             
             console.log(`🔍 部材 ${memberNumber}: 節点 ${startNode} → ${endNode}, 断面: ${section}`);
             
+            // 材料特性と断面性能の取得
+            const eInput = row.cells[3]?.querySelector('input');
+            const fSelect = row.cells[4]?.querySelector('select');
+            const fInput = row.cells[4]?.querySelector('input');
+            const iInput = row.cells[5]?.querySelector('input');
+            const aInput = row.cells[6]?.querySelector('input');
+            const zInput = row.cells[7]?.querySelector('input');
+            const sectionName = row.cells[8]?.textContent || '';
+            const sectionAxis = row.cells[9]?.textContent || '';
+            const iConnSelect = row.cells[11]?.querySelector('select');
+            const jConnSelect = row.cells[12]?.querySelector('select');
+            
+            const E = eInput ? parseFloat(eInput.value) || 205000 : 205000;
+            
+            // F値の取得（セレクトボックスまたはインプット）
+            let F = 235;
+            if (fSelect) {
+                F = parseFloat(fSelect.value) || 235;
+            } else if (fInput) {
+                F = parseFloat(fInput.value) || 235;
+            }
+            
+            const I = iInput ? parseFloat(iInput.value) || 0 : 0;
+            const A = aInput ? parseFloat(aInput.value) || 0 : 0;
+            const Z = zInput ? parseFloat(zInput.value) || 0 : 0;
+            const i_conn = iConnSelect ? iConnSelect.value : 'rigid';
+            const j_conn = jConnSelect ? jConnSelect.value : 'rigid';
+            
             // 開始節点と終了節点が有効な場合のみ追加
             if (!isNaN(startNode) && !isNaN(endNode) && startNode !== endNode) {
                 const memberData = {
-                    n1: startNode,
-                    n2: endNode,
-                    s: section
+                    i: startNode,
+                    j: endNode,
+                    E: E,
+                    F: F,
+                    I: I,
+                    A: A,
+                    Z: Z,
+                    i_conn: i_conn,
+                    j_conn: j_conn,
+                    sectionName: sectionName,
+                    sectionAxis: sectionAxis
                 };
-                console.log(`🔍 部材 ${memberNumber} データ取得:`, memberData);
+                console.log(`🔍 部材 ${memberNumber} 完全データ取得:`, memberData);
                 members.push(memberData);
             }
         }
@@ -13882,12 +13929,14 @@ function getCurrentModelData() {
                 continue;
             }
             
-            nodeLoads.push({
+            const loadData = {
                 n: node,
-                fx: fx,
-                fy: fy,
+                px: fx,
+                py: fy,
                 mz: mz
-            });
+            };
+            console.log(`🔍 節点荷重 ${node} 完全データ取得:`, loadData);
+            nodeLoads.push(loadData);
         }
     }
     
@@ -13932,12 +13981,14 @@ function getCurrentModelData() {
                 continue;
             }
             
-            memberLoads.push({
+            const loadData = {
                 m: member,
                 type: loadType,
                 magnitude: magnitude,
                 position: position
-            });
+            };
+            console.log(`🔍 部材荷重 ${member} 完全データ取得:`, loadData);
+            memberLoads.push(loadData);
         }
     }
     
@@ -13948,7 +13999,12 @@ function getCurrentModelData() {
         memberLoads: memberLoads
     };
     
-    console.log('🔍 取得した現在のモデル情報:', modelData);
+    console.log('🔍 完全取得したモデル情報:', {
+        nodeCount: nodes.length,
+        memberCount: members.length,
+        nodeLoadCount: nodeLoads.length,
+        memberLoadCount: memberLoads.length
+    });
     console.log('🔍 節点データ詳細:', modelData.nodes);
     console.log('🔍 部材データ詳細:', modelData.members);
     console.log('🔍 節点荷重データ詳細:', modelData.nodeLoads);
