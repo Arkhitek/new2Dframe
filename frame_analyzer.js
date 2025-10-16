@@ -3598,10 +3598,18 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             
             // 節点荷重復元
-            state.nodeLoads.forEach(l => addRow(elements.nodeLoadsTable, [`<input type="number" value="${l.node}">`, `<input type="number" value="${l.px}">`, `<input type="number" value="${l.py}">`, `<input type="number" value="${l.mz}">`], false));
+            console.log('🔍 restoreState: 節点荷重復元開始, 荷重数:', state.nodeLoads.length);
+            state.nodeLoads.forEach((l, index) => {
+                console.log(`🔍 restoreState: 節点荷重 ${index + 1} 復元:`, l);
+                addRow(elements.nodeLoadsTable, [`<input type="number" value="${l.node}">`, `<input type="number" value="${l.px}">`, `<input type="number" value="${l.py}">`, `<input type="number" value="${l.mz}">`], false);
+            });
             
             // 部材荷重復元
-            state.memberLoads.forEach(l => addRow(elements.memberLoadsTable, [`<input type="number" value="${l.member}">`, `<input type="number" value="${l.w}">`], false));
+            console.log('🔍 restoreState: 部材荷重復元開始, 荷重数:', state.memberLoads.length);
+            state.memberLoads.forEach((l, index) => {
+                console.log(`🔍 restoreState: 部材荷重 ${index + 1} 復元:`, l);
+                addRow(elements.memberLoadsTable, [`<input type="number" value="${l.member}">`, `<input type="number" value="${l.w}">`], false);
+            });
             
             renumberTables();
             if (typeof drawOnCanvas === 'function') {
@@ -14217,19 +14225,33 @@ function integrateEditData(newState) {
     
     // 荷重条件のプロパティ名をrestoreState関数が期待する形式に変換
     const convertNodeLoads = (loads) => {
-        return (loads || []).map(load => ({
-            node: load.n || load.node,
-            px: load.px || load.fx || 0,
-            py: load.py || load.fy || 0,
-            mz: load.mz || 0
-        }));
+        console.log('🔍 convertNodeLoads 入力:', loads);
+        const converted = (loads || []).map(load => {
+            const convertedLoad = {
+                node: load.n || load.node,
+                px: load.px || load.fx || 0,
+                py: load.py || load.fy || 0,
+                mz: load.mz || 0
+            };
+            console.log('🔍 節点荷重変換:', load, '→', convertedLoad);
+            return convertedLoad;
+        });
+        console.log('🔍 convertNodeLoads 出力:', converted);
+        return converted;
     };
     
     const convertMemberLoads = (loads) => {
-        return (loads || []).map(load => ({
-            member: load.m || load.member,
-            w: load.w || 0
-        }));
+        console.log('🔍 convertMemberLoads 入力:', loads);
+        const converted = (loads || []).map(load => {
+            const convertedLoad = {
+                member: load.m || load.member,
+                w: load.w || 0
+            };
+            console.log('🔍 部材荷重変換:', load, '→', convertedLoad);
+            return convertedLoad;
+        });
+        console.log('🔍 convertMemberLoads 出力:', converted);
+        return converted;
     };
     
     // 新しいデータを既存データに統合（重複なし）
@@ -14246,6 +14268,14 @@ function integrateEditData(newState) {
     
     // 統合されたデータでテーブルを更新
     if (window.restoreState) {
+        console.log('🔍 restoreState関数に渡すデータ:', {
+            nodeCount: integratedState.nodes.length,
+            memberCount: integratedState.members.length,
+            nodeLoadCount: integratedState.nodeLoads.length,
+            memberLoadCount: integratedState.memberLoads.length,
+            nodeLoads: integratedState.nodeLoads,
+            memberLoads: integratedState.memberLoads
+        });
         window.restoreState(integratedState);
     } else {
         console.error('Error: restoreState function is not available');
