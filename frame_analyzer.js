@@ -11973,7 +11973,7 @@ const loadPreset = (index) => {
             XLSX.writeFile(workbook, filename);
             
             console.log('エクセルファイルが正常に出力されました:', filename);
-            alert('エクセルファイルが正常に出力されました: ' + filename);
+            safeAlert('エクセルファイルが正常に出力されました: ' + filename);
             
         } catch (error) {
             console.error('エクセルファイル生成でエラーが発生しました:', error);
@@ -12501,7 +12501,7 @@ const loadPreset = (index) => {
             console.log('エクセル出力が完了しました');
         } catch (error) {
             console.error('エクセル出力でエラーが発生しました:', error);
-            alert('エクセル出力でエラーが発生しました: ' + error.message);
+            safeAlert('エクセル出力でエラーが発生しました: ' + error.message);
         }
     }
 
@@ -13151,19 +13151,19 @@ const initializeFrameGenerator = () => {
             
             // 入力値検証
             if (floors < 1 || floors > 20) {
-                alert('層数は1から20の間で設定してください。');
+                safeAlert('層数は1から20の間で設定してください。');
                 return;
             }
             if (spans < 1 || spans > 20) {
-                alert('スパン数は1から20の間で設定してください。');
+                safeAlert('スパン数は1から20の間で設定してください。');
                 return;
             }
             if (spanLength <= 0 || spanLength > 50) {
-                alert('スパン長は0より大きく50以下で設定してください。');
+                safeAlert('スパン長は0より大きく50以下で設定してください。');
                 return;
             }
             if (floorHeight <= 0 || floorHeight > 20) {
-                alert('階高は0より大きく20以下で設定してください。');
+                safeAlert('階高は0より大きく20以下で設定してください。');
                 return;
             }
             
@@ -13317,11 +13317,11 @@ const initializeFrameGenerator = () => {
                 }
             }, 700);
             
-            alert(`フレーム構造を生成しました！\n節点数: ${totalNodes}\n部材数: ${totalMembers}`);
+            safeAlert(`フレーム構造を生成しました！\n節点数: ${totalNodes}\n部材数: ${totalMembers}`);
             
         } catch (error) {
             console.error('フレーム生成エラー:', error);
-            alert('フレーム生成中にエラーが発生しました: ' + error.message);
+            safeAlert('フレーム生成中にエラーが発生しました: ' + error.message);
         }
     };
     
@@ -13423,7 +13423,7 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 const { nodes } = parseInputs();
                 if (nodes.length === 0) {
-                    alert('3D表示するモデルがありません。');
+                    safeAlert('3D表示するモデルがありません。');
                     return;
                 }
 
@@ -13431,7 +13431,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 viewerWindow = window.open('viewer_3d.html', 'Statica3DViewer', 'width=800,height=600,resizable=yes,scrollbars=yes');
 
                 if (!viewerWindow) {
-                    alert('ポップアップがブロックされた可能性があります。3Dビューアを開けませんでした。');
+                    safeAlert('ポップアップがブロックされた可能性があります。3Dビューアを開けませんでした。');
                     return;
                 }
 
@@ -13442,7 +13442,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             } catch (error) {
                 console.error('3Dビューアの起動に失敗しました:', error);
-                alert('3Dビューアの起動に失敗しました: ' + error.message);
+                safeAlert('3Dビューアの起動に失敗しました: ' + error.message);
             }
         });
     }
@@ -13460,6 +13460,7 @@ document.addEventListener('DOMContentLoaded', () => {
 let aiGenerationCancelled = false;
 let aiGenerationAbortController = null;
 let aiGenerationPopup = null;
+let isAIGenerationInProgress = false; // AI生成中のフラグ
 
 // AI生成中のポップアップを表示する関数
 function showAIGenerationPopup() {
@@ -13534,6 +13535,24 @@ function hideAIGenerationPopup() {
     }
 }
 
+// AI生成中はアラートを非表示にする関数
+function safeAlert(message) {
+    if (isAIGenerationInProgress) {
+        console.log('AI生成中: アラートをスキップしました -', message);
+        return;
+    }
+    alert(message);
+}
+
+// AI生成中はconfirmを非表示にする関数
+function safeConfirm(message) {
+    if (isAIGenerationInProgress) {
+        console.log('AI生成中: confirmをスキップしました -', message);
+        return false; // デフォルトでfalseを返す
+    }
+    return confirm(message);
+}
+
 async function generateModelWithAI(userPrompt, mode = 'new', retryCount = 0) {
     const aiGenerateBtn = document.getElementById('generate-model-btn');
     const aiStatus = document.getElementById('gemini-status-indicator');
@@ -13541,17 +13560,18 @@ async function generateModelWithAI(userPrompt, mode = 'new', retryCount = 0) {
     // Check if required elements exist
     if (!aiGenerateBtn) {
         console.error('Error: Could not find element with id "generate-model-btn"');
-        alert('AI生成ボタンが見つかりません。ページを再読み込みしてください。');
+        safeAlert('AI生成ボタンが見つかりません。ページを再読み込みしてください。');
         return;
     }
 
     // キャンセルフラグをリセット
     aiGenerationCancelled = false;
     aiGenerationAbortController = new AbortController();
+    isAIGenerationInProgress = true; // AI生成開始フラグ
     
     if (!aiStatus) {
         console.error('Error: Could not find element with id "gemini-status-indicator"');
-        alert('AIステータス表示要素が見つかりません。ページを再読み込みしてください。');
+        safeAlert('AIステータス表示要素が見つかりません。ページを再読み込みしてください。');
         return;
     }
 
@@ -13640,13 +13660,11 @@ async function generateModelWithAI(userPrompt, mode = 'new', retryCount = 0) {
 
         // ポップアップを非表示にする
         hideAIGenerationPopup();
+        isAIGenerationInProgress = false; // AI生成完了フラグ
 
         const successMessage = mode === 'edit' ? 'AIによるモデル編集が完了しました。' : 'AIによるモデル生成が完了しました。';
-        if (retryCount > 0) {
-            alert(`${successMessage} (${retryCount}回のリトライ後に成功)`);
-        } else {
-            alert(successMessage);
-        }
+        // AI生成中のアラートは表示しない
+        console.log(successMessage + (retryCount > 0 ? ` (${retryCount}回のリトライ後に成功)` : ''));
 
     } catch (error) {
         console.error('AIモデル生成エラー:', error);
@@ -13655,6 +13673,7 @@ async function generateModelWithAI(userPrompt, mode = 'new', retryCount = 0) {
         if (aiGenerationCancelled || (error.name === 'AbortError')) {
             console.log('🔍 AI生成がキャンセルされました');
             hideAIGenerationPopup();
+            isAIGenerationInProgress = false; // AI生成キャンセルフラグ
             
             // UIをリセット
             if (aiGenerateBtn) {
@@ -13684,6 +13703,7 @@ async function generateModelWithAI(userPrompt, mode = 'new', retryCount = 0) {
         
         // リトライ不可能またはリトライ上限に達した場合のエラー処理
         hideAIGenerationPopup(); // ポップアップを非表示にする
+        isAIGenerationInProgress = false; // AI生成エラー完了フラグ
         
         if (aiStatus) {
             if (error && error.message) {
@@ -13707,24 +13727,15 @@ async function generateModelWithAI(userPrompt, mode = 'new', retryCount = 0) {
             }
         }
         
-        // ユーザーへの通知
+        // ユーザーへの通知（AI生成中はアラートを表示しない）
         if (error && error.message) {
-            if (error.message.includes('Service tier capacity exceeded')) {
-                const shouldShowAlert = confirm('AIサービスが一時的に利用できません。\n「OK」をクリックすると再試行します。\n「キャンセル」をクリックすると終了します。');
-                if (shouldShowAlert) {
-                    // 手動リトライを実行
-                    setTimeout(() => {
-                        generateModelWithAI(userPrompt, mode, 0);
-                    }, 1000);
-                }
-            } else {
-                alert(`AIによるモデル生成に失敗しました。\nエラー: ${error.message}`);
-            }
+            console.error(`AIによるモデル生成に失敗しました。エラー: ${error.message}`);
         } else {
-            alert(`AIによるモデル生成に失敗しました。`);
+            console.error(`AIによるモデル生成に失敗しました。`);
         }
     } finally {
         // UIの状態を元に戻します
+        isAIGenerationInProgress = false; // 最終的にフラグをリセット
         if (aiGenerateBtn) {
             aiGenerateBtn.disabled = false;
             aiGenerateBtn.textContent = 'AIで生成';
@@ -14247,7 +14258,7 @@ function setupAIModelGenerationListeners() {
             const promptInput = document.getElementById('natural-language-input');
             if (!promptInput) {
                 console.error('Error: Could not find element with id "natural-language-input"');
-                alert('入力フィールドが見つかりません。ページを再読み込みしてください。');
+                safeAlert('入力フィールドが見つかりません。ページを再読み込みしてください。');
                 return;
             }
             
@@ -14259,7 +14270,7 @@ function setupAIModelGenerationListeners() {
                 console.log(`🔍 AI生成モード: ${selectedMode}, 指示: "${userPrompt}"`);
                 generateModelWithAI(userPrompt, selectedMode);
             } else {
-                alert('指示内容を入力してください。');
+                safeAlert('指示内容を入力してください。');
             }
         });
     } else {
@@ -14524,7 +14535,7 @@ function previewCurrentModel() {
         });
     }
     
-    alert(previewText);
+    safeAlert(previewText);
 }
 
 /**
