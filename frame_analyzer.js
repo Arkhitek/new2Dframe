@@ -14357,19 +14357,39 @@ function integrateEditData(newState) {
     // 重複を防ぐための節点ID生成関数
     const generateNodeId = (node) => `${node.x.toFixed(3)}_${node.y.toFixed(3)}`;
     
-    // 既存節点のIDセットを作成
-    const existingNodeIds = new Set(existingNodesWithDefaults.map(generateNodeId));
+    // AIが生成した節点データを優先し、既存節点との統合を行う
+    const newNodes = newState.nodes || [];
+    const integratedNodes = [];
     
-    // 新しい節点から既存と重複しないもののみを抽出
-    const uniqueNewNodes = (newState.nodes || []).filter(node => {
-        const nodeId = generateNodeId(node);
-        return !existingNodeIds.has(nodeId);
-    });
+    console.log(`🔍 既存節点数: ${existingNodesWithDefaults.length}, 新規節点数: ${newNodes.length}`);
+    console.log(`🔍 既存節点詳細:`, existingNodesWithDefaults);
+    console.log(`🔍 新規節点詳細:`, newNodes);
     
-    console.log(`🔍 既存節点数: ${existingNodesWithDefaults.length}, 新規節点数: ${uniqueNewNodes.length}`);
+    // 新規節点の最大数と既存節点の最大数を比較
+    const maxNodes = Math.max(existingNodesWithDefaults.length, newNodes.length);
     
-    // 統合後の全節点リストを作成（既存 + 新規）
-    const allNodes = [...existingNodesWithDefaults, ...uniqueNewNodes];
+    for (let i = 0; i < maxNodes; i++) {
+        const existingNode = existingNodesWithDefaults[i];
+        const newNode = newNodes[i];
+        
+        console.log(`🔍 節点${i + 1}処理中: 既存=`, existingNode, '新規=', newNode);
+        
+        if (newNode) {
+            // 新規節点がある場合は新規節点を使用（修正された節点または新規節点）
+            console.log(`🔍 節点${i + 1}使用: 新規節点`, newNode);
+            integratedNodes.push(newNode);
+        } else if (existingNode) {
+            // 新規節点がなく既存節点がある場合は既存節点を保持
+            console.log(`🔍 節点${i + 1}保持: 既存節点`, existingNode);
+            integratedNodes.push(existingNode);
+        }
+    }
+    
+    console.log(`🔍 統合後節点数: ${integratedNodes.length}`);
+    console.log(`🔍 統合後節点詳細:`, integratedNodes);
+    
+    // 統合後の全節点リストを作成
+    const allNodes = integratedNodes;
     
     // 部材の重複チェック（座標ベース）
     const generateMemberId = (member) => {
@@ -14496,7 +14516,7 @@ function integrateEditData(newState) {
         });
 
         const integratedState = {
-            nodes: [...existingNodesWithDefaults, ...uniqueNewNodes],
+            nodes: integratedNodes, // 統合された節点データを使用
             members: integratedMembers, // 統合された部材データを使用
             nodeLoads: Array.from(nodeLoadMap.values()),
             memberLoads: Array.from(memberLoadMap.values())
