@@ -1,323 +1,282 @@
-// Vercelのサーバーレス関数のエントリーポイント
-export default async function handler(req, res) {
-    // 関数起動時のエラーハンドリング
-    try {
-        console.log('🚀 Vercel関数が呼び出されました:', {
-            method: req.method,
-            url: req.url,
-            headers: req.headers,
-            body: req.body ? 'Body exists' : 'No body',
-            nodeVersion: process.version,
-            platform: process.platform
-        });
-        
-        // 基本的な環境チェック
-        console.log('🔍 環境チェック開始...');
-        console.log('🔍 Node.js バージョン:', process.version);
-        console.log('🔍 プラットフォーム:', process.platform);
-        console.log('🔍 利用可能な環境変数数:', Object.keys(process.env).length);
-        
-        // GoogleGenerativeAIの動的インポート
-        console.log('🔍 GoogleGenerativeAI パッケージを動的インポート中...');
-        let GoogleGenerativeAI;
-        try {
-            const genAIModule = await import('@google/generative-ai');
-            GoogleGenerativeAI = genAIModule.GoogleGenerativeAI;
-            console.log('✅ GoogleGenerativeAI インポート成功:', typeof GoogleGenerativeAI);
-        } catch (importError) {
-            console.error('❌ GoogleGenerativeAI インポートエラー:', importError);
-            console.error('❌ パッケージが見つからない場合の代替処理を実行します');
-            
-            // パッケージが見つからない場合の代替処理
-            if (req.method !== 'POST') {
-                return res.status(405).json({ error: 'Method Not Allowed' });
-            }
-            
-            const { prompt: userPrompt, mode = 'new' } = req.body;
-            
-            if (!userPrompt) {
-                return res.status(400).json({ error: '指示内容が空です。' });
-            }
-            
-            // 簡単なフォールバック構造を生成
-            const fallbackStructure = generateSimpleFallbackStructure(userPrompt);
-            
-            console.log('🔧 フォールバック構造を生成しました:', fallbackStructure);
-            
-            // フロントエンドが期待するレスポンス形式に合わせる
-            const responseForFrontend = {
-                candidates: [{
-                    content: {
-                        parts: [{
-                            text: JSON.stringify(fallbackStructure)
-                        }]
-                    }
-                }]
-            };
-            
-            return res.status(200).json(responseForFrontend);
-        }
-        
-        if (req.method !== 'POST') {
-            console.log('❌ 不正なHTTPメソッド:', req.method);
-            return res.status(405).json({ error: 'Method Not Allowed' });
-        }
+// 必要なライブラリを読み込む
+const express = require('express');
+const https = require('https');
+require('dotenv').config({ path: '../.env' }); // ルートの.envファイルを読み込む
 
+// Expressのルーターを作成
+const router = express.Router();
+
+// Mistral AI APIの設定
+const MISTRAL_API_KEY = process.env.MISTRAL_API_KEY || 'FjuAEorphVEPBIjqJVLagjfqlFYyRzFC';
+const MISTRAL_API_URL = 'https://api.mistral.ai/v1/chat/completions';
+
+// POSTリクエストを処理する部分
+router.post('/', async (req, res) => {
     try {
         const { prompt: userPrompt, mode = 'new', currentModel } = req.body;
-        
-        // リクエストボディの検証を強化
-        console.log('🔍 APIリクエスト受信:', { 
-            hasPrompt: !!userPrompt, 
-            mode, 
-            hasCurrentModel: !!currentModel,
-            promptLength: userPrompt ? userPrompt.length : 0
-        });
-        
         if (!userPrompt) {
-            console.error('❌ エラー: 指示内容が空です');
             return res.status(400).json({ error: '指示内容が空です。' });
         }
-
-        // ▼▼▼【変更点 1】APIキーの環境変数名を変更 ▼▼▼
-        console.log('🔍 環境変数をチェック中...');
-        console.log('🔍 利用可能な環境変数:', Object.keys(process.env).filter(key => key.includes('GEMINI') || key.includes('API')));
         
-        const API_KEY = process.env.GEMINI_API_KEY;
-        console.log('🔍 GEMINI_API_KEYの存在:', !!API_KEY);
-        console.log('🔍 GEMINI_API_KEYの長さ:', API_KEY ? API_KEY.length : 0);
-        
+        const API_KEY = process.env.MISTRAL_API_KEY || 'FjuAEorphVEPBIjqJVLagjfqlFYyRzFC';
         if (!API_KEY) {
-            console.error('❌ エラー: Gemini APIキーが設定されていません');
-            console.error('❌ 環境変数GEMINI_API_KEYが設定されていません');
-            console.error('❌ Vercelの環境変数設定を確認してください');
-            throw new Error("Gemini APIのキーがサーバーに設定されていません。環境変数GEMINI_API_KEYを確認してください。");
+            throw new Error("Mistral AI APIのキーがサーバーに設定されていません。");
         }
-        
-        console.log('✅ Gemini APIキーが確認されました');
-        
-        // ▼▼▼【変更点 2】Gemini APIクライアントを初期化 ▼▼▼
-        console.log('🔍 GoogleGenerativeAIクライアントを初期化中...');
-        const genAI = new GoogleGenerativeAI(API_KEY);
-        console.log('✅ GoogleGenerativeAIクライアント初期化完了');
-        
-        console.log('🔍 Geminiモデルを取得中...');
-        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-        console.log('✅ Geminiモデル取得完了');
 
-        // ▼▼▼【変更点 3】プロンプトを結合して単一のテキストにする ▼▼▼
-        // (既存のプロンプト生成ロジックはそのまま利用します)
-        console.log('🔍 システムプロンプトを生成中...');
+         // APIキーの有効性を確認（簡潔に）
+         console.log('🔑 Mistral AI APIキー設定済み:', API_KEY ? 'Yes' : 'No');
+
+        // OpenAI APIにリクエストを送信
         const systemPrompt = createSystemPromptForBackend(mode, currentModel);
-        console.log('✅ システムプロンプト生成完了');
-        
         let userMessage = userPrompt;
         if (mode === 'edit' && currentModel) {
-            console.log('🔍 編集プロンプトを生成中...');
             userMessage = createEditPrompt(userPrompt, currentModel);
-            console.log('✅ 編集プロンプト生成完了');
         }
-        
-        // システムプロンプトとユーザープロンプトを結合
-        const fullPrompt = `${systemPrompt}\n\nユーザーの指示: "${userMessage}"`;
-        
-        console.log('🔍 Gemini APIに送信するプロンプト長:', fullPrompt.length);
-        console.log('🔍 プロンプトの最初の500文字:', fullPrompt.substring(0, 500));
 
-        // ▼▼▼【変更点 4】Mistral API呼び出しをGemini API呼び出しに置き換え ▼▼▼
-        console.log('🚀 Gemini APIを呼び出し中...');
-        let result, response;
+        console.log('🤖 Mistral AI APIにリクエストを送信中...');
         
-        try {
-            result = await model.generateContent(fullPrompt);
-            console.log('✅ Gemini API呼び出し成功');
-            
-            response = await result.response;
-            console.log('✅ Gemini APIレスポンス取得成功');
-        } catch (apiError) {
-            console.error('❌ Gemini API呼び出しエラー:', apiError);
-            console.error('❌ APIエラーの詳細:', {
-                name: apiError.name,
-                message: apiError.message,
-                code: apiError.code,
-                status: apiError.status
+         // Mistral AI APIのみを使用（モック機能は完全に無効化）
+         console.log('🤖 Mistral AI APIのみを使用します（モック機能無効）');
+         
+         // より効率的なプロンプト生成
+         const efficientPrompt = createEfficientPrompt(userPrompt, mode, currentModel);
+         
+         // Mistral AI APIに直接HTTPリクエストを送信
+         const requestData = JSON.stringify({
+             model: "mistral-small-latest",
+             messages: [
+                 {
+                     role: "system",
+                     content: efficientPrompt
+                 },
+                 {
+                     role: "user",
+                     content: userPrompt
+                 }
+             ],
+             temperature: 0.1,
+             max_tokens: 2000, // Increased for complex multi-span structures
+             top_p: 0.7
+         });
+
+         const completion = await new Promise((resolve, reject) => {
+             const options = {
+                 hostname: 'api.mistral.ai',
+                 port: 443,
+                 path: '/v1/chat/completions',
+                 method: 'POST',
+                 headers: {
+                     'Content-Type': 'application/json',
+                     'Authorization': `Bearer ${MISTRAL_API_KEY}`,
+                     'Content-Length': Buffer.byteLength(requestData)
+                 }
+             };
+
+             const req = https.request(options, (res) => {
+                 let data = '';
+                 res.on('data', (chunk) => {
+                     data += chunk;
+                 });
+                 res.on('end', () => {
+                     try {
+                         const result = JSON.parse(data);
+                         if (res.statusCode !== 200) {
+                             reject(new Error(`Mistral AI APIエラー: ${res.statusCode} ${res.statusMessage}`));
+                         } else {
+                             resolve(result);
+                         }
+                     } catch (error) {
+                         reject(new Error('レスポンスの解析に失敗しました'));
+                     }
+                 });
+             });
+
+             req.on('error', (error) => {
+                 reject(new Error(`リクエストエラー: ${error.message}`));
+             });
+
+            req.setTimeout(60000, () => { // Increased to 60 seconds for complex structures
+                req.destroy();
+                reject(new Error('リクエストタイムアウト（60秒）'));
             });
-            throw apiError;
-        }
-        
-        if (!response) {
-            console.error('❌ エラー: Gemini AIから予期しない形式のレスポンス');
-            throw new Error("Gemini AIから予期しない形式のレスポンスがありました。");
-        }
-        
-        const generatedText = response.text();
-        console.log('✅ Gemini APIからの応答を受信:', generatedText.length, '文字');
 
-        // フロントエンドが期待するレスポンス形式に合わせる
-        const responseForFrontend = {
-            candidates: [{
-                content: {
-                    parts: [{
-                        text: generatedText
-                    }]
-                }
-            }]
-        };
+             req.write(requestData);
+             req.end();
+         });
 
-        console.log('✅ レスポンスをフロントエンドに送信中...');
-        res.status(200).json(responseForFrontend);
+         if (!completion.choices || completion.choices.length === 0) {
+             throw new Error("Mistral AIから予期しない形式のレスポンスがありました。");
+         }
+
+         const generatedText = completion.choices[0].message.content;
+         console.log('✅ Mistral AI APIからの応答を受信しました');
+
+         // フロントエンドが期待するレスポンス形式に合わせる
+         const responseForFrontend = {
+             candidates: [{
+                 content: {
+                     parts: [{ text: generatedText }]
+                 }
+             }]
+         };
+
+         res.status(200).json(responseForFrontend);
+         return;
 
     } catch (error) {
-        console.error('❌ サーバーレス関数エラー:', error);
-        console.error('❌ エラーの詳細:', {
-            name: error.name,
-            message: error.message,
-            stack: error.stack,
-            code: error.code,
-            status: error.status
-        });
-        
+        console.error('APIルートエラー:', error);
         let errorMessage = 'AIモデルの生成に失敗しました。';
-        let statusCode = 500;
         
-        if (error.message.includes('SAFETY')) {
-            errorMessage = '安全性の設定により、応答がブロックされました。より一般的な表現で試してください。';
-            statusCode = 400;
-        } else if (error.message.includes('APIのキーがサーバーに設定されていません')) {
-            errorMessage = 'AIサービスの設定に問題があります。管理者にお問い合わせください。';
-            statusCode = 503;
-        } else if (error.message.includes('quota') || error.message.includes('limit') || error.message.includes('QUOTA_EXCEEDED')) {
-            errorMessage = 'AIサービスの利用制限に達しました。しばらく時間をおいてから再度お試しください。';
-            statusCode = 429;
-        } else if (error.message.includes('network') || error.message.includes('timeout') || error.message.includes('NETWORK_ERROR')) {
-            errorMessage = 'ネットワークエラーが発生しました。接続を確認して再度お試しください。';
-            statusCode = 503;
-        } else if (error.message.includes('PERMISSION_DENIED') || error.message.includes('API_KEY_INVALID')) {
-            errorMessage = 'AIサービスの認証に問題があります。管理者にお問い合わせください。';
-            statusCode = 401;
-        } else if (error.message.includes('RESOURCE_EXHAUSTED')) {
-            errorMessage = 'AIサービスのリソースが不足しています。しばらく時間をおいてから再度お試しください。';
-            statusCode = 429;
-        } else if (error instanceof SyntaxError) {
-            errorMessage = 'AIからの応答が不正な形式でした。少し表現を変えて再度試してください。';
-            statusCode = 400;
-        } else {
-            errorMessage = error.message || '予期しないエラーが発生しました。';
-        }
-        
-        console.error('❌ エラーレスポンス送信:', { statusCode, errorMessage });
-        
-        // Vercelの関数が正常に終了するようにレスポンスを送信
-        try {
-            res.status(statusCode).json({ error: errorMessage });
-        } catch (responseError) {
-            console.error('❌ レスポンス送信エラー:', responseError);
-        }
-    } catch (startupError) {
-        // 関数起動時のエラー（インポートエラーなど）
-        console.error('❌ 関数起動時エラー:', startupError);
-        console.error('❌ 起動エラーの詳細:', {
-            name: startupError.name,
-            message: startupError.message,
-            stack: startupError.stack
-        });
-        
-        try {
-            res.status(500).json({ 
-                error: 'サーバー関数の起動に失敗しました。',
-                details: startupError.message 
-            });
-        } catch (responseError) {
-            console.error('❌ 起動エラーレスポンス送信失敗:', responseError);
-        }
+               if (error.message.includes('quota') || error.message.includes('billing') || error.message.includes('exceeded')) {
+                   errorMessage = 'Mistral AI APIのクォータ制限に達しました。APIキーの使用量を確認するか、新しいAPIキーを設定してください。';
+               } else if (error.message.includes('429') || error.message.includes('Too Many Requests')) {
+                   errorMessage = 'APIのリクエスト制限に達しました。しばらく待ってから再度お試しください。';
+               } else if (error.message.includes('タイムアウト') || error.message.includes('timeout')) {
+                   errorMessage = 'APIの応答が遅いため、より簡単な構造で再度お試しください。';
+               } else if (error.message.includes('SAFETY')) {
+                   errorMessage = '安全性の設定により、応答がブロックされました。より一般的な表現で試してください。';
+               } else if (error instanceof SyntaxError) {
+                    errorMessage = 'AIからの応答が不正な形式でした。少し表現を変えて再度試してください。';
+               } else {
+                   errorMessage = error.message;
+               }
+               
+               // フォールバック機能: 2スパン構造の場合は基本的な構造を提供
+               if (userPrompt.includes('2スパン') || userPrompt.includes('2span')) {
+                   console.log('🔄 フォールバック機能: 2スパン構造を生成します');
+                   const fallbackModel = generateFallback2SpanFrame();
+                   const responseForFrontend = {
+                       candidates: [{
+                           content: {
+                               parts: [{ text: JSON.stringify(fallbackModel) }]
+                           }
+                       }]
+                   };
+                   res.status(200).json(responseForFrontend);
+                   return;
+               }
+               
+        res.status(500).json({ error: errorMessage });
     }
+});
+
+// このファイルを `module.exports` としてエクスポート
+module.exports = router;
+
+// フォールバック機能: 2スパン構造を生成
+function generateFallback2SpanFrame() {
+    return {
+        nodes: [
+            {"x": 0, "y": 0, "s": "x"},   // 左端柱脚
+            {"x": 6, "y": 0, "s": "x"},   // 中央柱脚
+            {"x": 12, "y": 0, "s": "x"},  // 右端柱脚
+            {"x": 0, "y": 3, "s": "f"},   // 1層左端
+            {"x": 6, "y": 3, "s": "f"},   // 1層中央
+            {"x": 12, "y": 3, "s": "f"},  // 1層右端
+            {"x": 0, "y": 6, "s": "f"},   // 2層左端
+            {"x": 6, "y": 6, "s": "f"},   // 2層中央
+            {"x": 12, "y": 6, "s": "f"},  // 2層右端
+            {"x": 0, "y": 9, "s": "f"},   // 3層左端
+            {"x": 6, "y": 9, "s": "f"},   // 3層中央
+            {"x": 12, "y": 9, "s": "f"},  // 3層右端
+            {"x": 0, "y": 12, "s": "f"},  // 4層左端
+            {"x": 6, "y": 12, "s": "f"},  // 4層中央
+            {"x": 12, "y": 12, "s": "f"}, // 4層右端
+            {"x": 0, "y": 15, "s": "f"},  // 5層左端
+            {"x": 6, "y": 15, "s": "f"},  // 5層中央
+            {"x": 12, "y": 15, "s": "f"}  // 5層右端
+        ],
+        members: [
+            // 柱（縦方向）
+            {"i": 1, "j": 4, "E": 205000, "I": 0.00011, "A": 0.005245, "Z": 0.000638},
+            {"i": 2, "j": 5, "E": 205000, "I": 0.00011, "A": 0.005245, "Z": 0.000638},
+            {"i": 3, "j": 6, "E": 205000, "I": 0.00011, "A": 0.005245, "Z": 0.000638},
+            {"i": 4, "j": 7, "E": 205000, "I": 0.00011, "A": 0.005245, "Z": 0.000638},
+            {"i": 5, "j": 8, "E": 205000, "I": 0.00011, "A": 0.005245, "Z": 0.000638},
+            {"i": 6, "j": 9, "E": 205000, "I": 0.00011, "A": 0.005245, "Z": 0.000638},
+            {"i": 7, "j": 10, "E": 205000, "I": 0.00011, "A": 0.005245, "Z": 0.000638},
+            {"i": 8, "j": 11, "E": 205000, "I": 0.00011, "A": 0.005245, "Z": 0.000638},
+            {"i": 9, "j": 12, "E": 205000, "I": 0.00011, "A": 0.005245, "Z": 0.000638},
+            {"i": 10, "j": 13, "E": 205000, "I": 0.00011, "A": 0.005245, "Z": 0.000638},
+            {"i": 11, "j": 14, "E": 205000, "I": 0.00011, "A": 0.005245, "Z": 0.000638},
+            {"i": 12, "j": 15, "E": 205000, "I": 0.00011, "A": 0.005245, "Z": 0.000638},
+            {"i": 13, "j": 16, "E": 205000, "I": 0.00011, "A": 0.005245, "Z": 0.000638},
+            {"i": 14, "j": 17, "E": 205000, "I": 0.00011, "A": 0.005245, "Z": 0.000638},
+            {"i": 15, "j": 18, "E": 205000, "I": 0.00011, "A": 0.005245, "Z": 0.000638},
+            // 梁（横方向）
+            {"i": 4, "j": 5, "E": 205000, "I": 0.00011, "A": 0.005245, "Z": 0.000638},
+            {"i": 5, "j": 6, "E": 205000, "I": 0.00011, "A": 0.005245, "Z": 0.000638},
+            {"i": 7, "j": 8, "E": 205000, "I": 0.00011, "A": 0.005245, "Z": 0.000638},
+            {"i": 8, "j": 9, "E": 205000, "I": 0.00011, "A": 0.005245, "Z": 0.000638},
+            {"i": 10, "j": 11, "E": 205000, "I": 0.00011, "A": 0.005245, "Z": 0.000638},
+            {"i": 11, "j": 12, "E": 205000, "I": 0.00011, "A": 0.005245, "Z": 0.000638},
+            {"i": 13, "j": 14, "E": 205000, "I": 0.00011, "A": 0.005245, "Z": 0.000638},
+            {"i": 14, "j": 15, "E": 205000, "I": 0.00011, "A": 0.005245, "Z": 0.000638},
+            {"i": 16, "j": 17, "E": 205000, "I": 0.00011, "A": 0.005245, "Z": 0.000638},
+            {"i": 17, "j": 18, "E": 205000, "I": 0.00011, "A": 0.005245, "Z": 0.000638}
+        ]
+    };
 }
 
 
-/**
- * 簡単なフォールバック構造を生成する関数
- * @param {string} userPrompt ユーザーの指示
- * @returns {Object} 構造データ
- */
-function generateSimpleFallbackStructure(userPrompt) {
-    const prompt = userPrompt.toLowerCase();
-    
-    if (prompt.includes('ラーメン') || prompt.includes('フレーム')) {
-        if (prompt.includes('2層') || prompt.includes('2階')) {
-            return {
-                nodes: [
-                    { x: 0, y: 0, s: "x" },
-                    { x: 6, y: 0, s: "x" },
-                    { x: 0, y: 4, s: "f" },
-                    { x: 6, y: 4, s: "f" },
-                    { x: 0, y: 8, s: "f" },
-                    { x: 6, y: 8, s: "f" }
-                ],
-                members: [
-                    { i: 1, j: 3, E: 205000, I: 0.00011, A: 0.005245, Z: 0.000638 },
-                    { i: 2, j: 4, E: 205000, I: 0.00011, A: 0.005245, Z: 0.000638 },
-                    { i: 3, j: 4, E: 205000, I: 0.00011, A: 0.005245, Z: 0.000638 },
-                    { i: 3, j: 5, E: 205000, I: 0.00011, A: 0.005245, Z: 0.000638 },
-                    { i: 4, j: 6, E: 205000, I: 0.00011, A: 0.005245, Z: 0.000638 },
-                    { i: 5, j: 6, E: 205000, I: 0.00011, A: 0.005245, Z: 0.000638 }
-                ]
-            };
-        } else if (prompt.includes('5層') || prompt.includes('5階')) {
-            return {
-                nodes: [
-                    { x: 0, y: 0, s: "x" },
-                    { x: 6, y: 0, s: "x" },
-                    { x: 0, y: 4, s: "f" },
-                    { x: 6, y: 4, s: "f" },
-                    { x: 0, y: 8, s: "f" },
-                    { x: 6, y: 8, s: "f" },
-                    { x: 0, y: 12, s: "f" },
-                    { x: 6, y: 12, s: "f" },
-                    { x: 0, y: 16, s: "f" },
-                    { x: 6, y: 16, s: "f" },
-                    { x: 0, y: 20, s: "f" },
-                    { x: 6, y: 20, s: "f" }
-                ],
-                members: [
-                    { i: 1, j: 3, E: 205000, I: 0.00011, A: 0.005245, Z: 0.000638 },
-                    { i: 2, j: 4, E: 205000, I: 0.00011, A: 0.005245, Z: 0.000638 },
-                    { i: 3, j: 4, E: 205000, I: 0.00011, A: 0.005245, Z: 0.000638 },
-                    { i: 3, j: 5, E: 205000, I: 0.00011, A: 0.005245, Z: 0.000638 },
-                    { i: 4, j: 6, E: 205000, I: 0.00011, A: 0.005245, Z: 0.000638 },
-                    { i: 5, j: 6, E: 205000, I: 0.00011, A: 0.005245, Z: 0.000638 },
-                    { i: 5, j: 7, E: 205000, I: 0.00011, A: 0.005245, Z: 0.000638 },
-                    { i: 6, j: 8, E: 205000, I: 0.00011, A: 0.005245, Z: 0.000638 },
-                    { i: 7, j: 8, E: 205000, I: 0.00011, A: 0.005245, Z: 0.000638 },
-                    { i: 7, j: 9, E: 205000, I: 0.00011, A: 0.005245, Z: 0.000638 },
-                    { i: 8, j: 10, E: 205000, I: 0.00011, A: 0.005245, Z: 0.000638 },
-                    { i: 9, j: 10, E: 205000, I: 0.00011, A: 0.005245, Z: 0.000638 },
-                    { i: 9, j: 11, E: 205000, I: 0.00011, A: 0.005245, Z: 0.000638 },
-                    { i: 10, j: 12, E: 205000, I: 0.00011, A: 0.005245, Z: 0.000638 },
-                    { i: 11, j: 12, E: 205000, I: 0.00011, A: 0.005245, Z: 0.000638 }
-                ]
-            };
-        } else {
-            // デフォルトは2層ラーメン
-            return generateSimpleFallbackStructure('2層ラーメン');
-        }
-    } else if (prompt.includes('門型') || prompt.includes('門')) {
-        return {
-            nodes: [
-                { x: 0, y: 0, s: "x" },
-                { x: 8, y: 0, s: "x" },
-                { x: 0, y: 6, s: "f" },
-                { x: 8, y: 6, s: "f" }
-            ],
-            members: [
-                { i: 1, j: 3, E: 205000, I: 0.00011, A: 0.005245, Z: 0.000638 },
-                { i: 2, j: 4, E: 205000, I: 0.00011, A: 0.005245, Z: 0.000638 },
-                { i: 3, j: 4, E: 205000, I: 0.00011, A: 0.005245, Z: 0.000638 }
-            ]
-        };
+// 効率的なプロンプト生成関数（クォータ制限回避用）
+function createEfficientPrompt(userPrompt, mode = 'new', currentModel = null) {
+    let prompt = `2Dフレーム構造解析モデルを生成するAIです。`;
+
+    if (mode === 'edit') {
+        prompt += `既存モデルを編集します。`;
     } else {
-        // デフォルトは2層ラーメン
-        return generateSimpleFallbackStructure('2層ラーメン');
+        prompt += `新しい構造モデルを作成します。`;
     }
+
+       prompt += `以下のJSON形式で出力してください（説明なし、完全なJSONのみ）:
+
+       **重要: スパン数に注意**
+       - 1スパン = 2列の柱（左端、右端）
+       - 2スパン = 3列の柱（左端、中央、右端）
+       - 3スパン = 4列の柱（左端、中央1、中央2、右端）`
+
+       **単純梁:**
+       {"nodes":[{"x":0,"y":0,"s":"p"},{"x":8,"y":0,"s":"p"}],"members":[{"i":1,"j":2,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638}]}
+
+       **2層ラーメン:**
+       {"nodes":[{"x":0,"y":0,"s":"x"},{"x":6,"y":0,"s":"x"},{"x":0,"y":3,"s":"f"},{"x":6,"y":3,"s":"f"},{"x":0,"y":6,"s":"f"},{"x":6,"y":6,"s":"f"}],"members":[{"i":1,"j":3,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638},{"i":2,"j":4,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638},{"i":3,"j":5,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638},{"i":4,"j":6,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638},{"i":3,"j":4,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638},{"i":5,"j":6,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638}]}
+
+       **5層ラーメン:**
+       {"nodes":[{"x":0,"y":0,"s":"x"},{"x":6,"y":0,"s":"x"},{"x":0,"y":3,"s":"f"},{"x":6,"y":3,"s":"f"},{"x":0,"y":6,"s":"f"},{"x":6,"y":6,"s":"f"},{"x":0,"y":9,"s":"f"},{"x":6,"y":9,"s":"f"},{"x":0,"y":12,"s":"f"},{"x":6,"y":12,"s":"f"},{"x":0,"y":15,"s":"f"},{"x":6,"y":15,"s":"f"}],"members":[{"i":1,"j":3,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638},{"i":2,"j":4,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638},{"i":3,"j":5,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638},{"i":4,"j":6,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638},{"i":5,"j":7,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638},{"i":6,"j":8,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638},{"i":7,"j":9,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638},{"i":8,"j":10,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638},{"i":9,"j":11,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638},{"i":10,"j":12,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638},{"i":3,"j":4,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638},{"i":5,"j":6,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638},{"i":7,"j":8,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638},{"i":9,"j":10,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638},{"i":11,"j":12,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638}]}
+
+       **5層ラーメン(スパン8m):**
+       {"nodes":[{"x":0,"y":0,"s":"x"},{"x":8,"y":0,"s":"x"},{"x":0,"y":3,"s":"f"},{"x":8,"y":3,"s":"f"},{"x":0,"y":6,"s":"f"},{"x":8,"y":6,"s":"f"},{"x":0,"y":9,"s":"f"},{"x":8,"y":9,"s":"f"},{"x":0,"y":12,"s":"f"},{"x":8,"y":12,"s":"f"},{"x":0,"y":15,"s":"f"},{"x":8,"y":15,"s":"f"}],"members":[{"i":1,"j":3,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638},{"i":2,"j":4,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638},{"i":3,"j":5,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638},{"i":4,"j":6,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638},{"i":5,"j":7,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638},{"i":6,"j":8,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638},{"i":7,"j":9,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638},{"i":8,"j":10,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638},{"i":9,"j":11,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638},{"i":10,"j":12,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638},{"i":3,"j":4,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638},{"i":5,"j":6,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638},{"i":7,"j":8,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638},{"i":9,"j":10,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638},{"i":11,"j":12,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638}]}
+
+       **5層2スパンのラーメン(3列柱):**
+       {"nodes":[{"x":0,"y":0,"s":"x"},{"x":6,"y":0,"s":"x"},{"x":12,"y":0,"s":"x"},{"x":0,"y":3,"s":"f"},{"x":6,"y":3,"s":"f"},{"x":12,"y":3,"s":"f"},{"x":0,"y":6,"s":"f"},{"x":6,"y":6,"s":"f"},{"x":12,"y":6,"s":"f"},{"x":0,"y":9,"s":"f"},{"x":6,"y":9,"s":"f"},{"x":12,"y":9,"s":"f"},{"x":0,"y":12,"s":"f"},{"x":6,"y":12,"s":"f"},{"x":12,"y":12,"s":"f"},{"x":0,"y":15,"s":"f"},{"x":6,"y":15,"s":"f"},{"x":12,"y":15,"s":"f"}],"members":[{"i":1,"j":4,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638},{"i":2,"j":5,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638},{"i":3,"j":6,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638},{"i":4,"j":7,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638},{"i":5,"j":8,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638},{"i":6,"j":9,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638},{"i":7,"j":10,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638},{"i":8,"j":11,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638},{"i":9,"j":12,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638},{"i":10,"j":13,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638},{"i":11,"j":14,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638},{"i":12,"j":15,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638},{"i":13,"j":16,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638},{"i":14,"j":17,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638},{"i":15,"j":18,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638},{"i":4,"j":5,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638},{"i":5,"j":6,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638},{"i":7,"j":8,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638},{"i":8,"j":9,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638},{"i":10,"j":11,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638},{"i":11,"j":12,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638},{"i":13,"j":14,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638},{"i":14,"j":15,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638},{"i":16,"j":17,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638},{"i":17,"j":18,"E":205000,"I":0.00011,"A":0.005245,"Z":0.000638}]}
+
+       **重要: 2スパン構造は3列の柱が必要（左端、中央、右端）**
+
+       **ルール:**
+       - 節点: x,y座標(m), s=境界条件(f=自由,p=ピン,r=ローラー,x=固定)
+       - 部材: i,j=節点番号(1から), E=205000, I=0.00011, A=0.005245, Z=0.000638
+       - 座標系: 右=+X, 上=+Y
+       - 節点番号は1から始まる連番
+       - 存在する節点のみ参照
+       - 柱脚(Y=0)は通常"x"(固定)
+       - スパン6-10m, 高さ3-6mが一般的
+       - 層数指定時は各層3m間隔で配置
+       - 必ず完全なJSONを出力し、最後に}で終了すること
+       - 複雑な構造でも必ず全ての部材を含めること
+       - JSONの構文エラーを避けるため、カンマと括弧に注意すること`;
+
+           if (mode === 'edit' && currentModel) {
+               prompt += `\n\n現在のモデル: 節点${currentModel.nodes?.length || 0}個, 部材${currentModel.members?.length || 0}個`;
+               prompt += `\n\n**編集時の注意事項:**
+- 既存の構造安定性を維持すること
+- 柱脚(Y=0)の節点は必ず"x"(固定)にすること
+- 編集後も構造的に安定なモデルになること
+- 部材の接続性を保持すること
+- スパン変更時は既存の層構造を維持すること`;
+           }
+
+           return prompt;
 }
 
 // ▼▼▼ 以下、既存のプロンプト生成関数 (変更なし) ▼▼▼

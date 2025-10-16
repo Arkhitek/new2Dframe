@@ -5,12 +5,13 @@
 
 ## 必要な準備
 
-### 1. Gemini APIキーの取得
-1. [Google AI Studio](https://aistudio.google.com/) にアクセス
-2. Googleアカウントでログイン
-3. 「Get API Key」をクリック
-4. 新しいAPIキーを作成
-5. 生成されたAPIキーをコピー（後で使用します）
+### 1. Mistral AI APIキーの取得
+1. [Mistral AI Platform](https://console.mistral.ai/) にアクセス
+2. Mistral AIアカウントでログイン
+3. 「API Keys」セクションに移動
+4. 「Create new secret key」をクリック
+5. 新しいAPIキーを作成
+6. 生成されたAPIキーをコピー（後で使用します）
 
 ### 2. Netlifyアカウントの準備
 1. [Netlify](https://netlify.com/) でアカウントを作成
@@ -35,17 +36,17 @@ npm install
 
 **Windows (PowerShell):**
 ```powershell
-$env:GEMINI_API_KEY="your_actual_gemini_api_key_here"
+$env:MISTRAL_API_KEY="FjuAEorphVEPBIjqJVLagjfqlFYyRzFC"
 ```
 
 **Windows (Command Prompt):**
 ```cmd
-set GEMINI_API_KEY=your_actual_gemini_api_key_here
+set MISTRAL_API_KEY=FjuAEorphVEPBIjqJVLagjfqlFYyRzFC
 ```
 
 **macOS/Linux:**
 ```bash
-export GEMINI_API_KEY="your_actual_gemini_api_key_here"
+export MISTRAL_API_KEY="FjuAEorphVEPBIjqJVLagjfqlFYyRzFC"
 ```
 
 ### ステップ2: ローカルサーバーの起動
@@ -81,15 +82,15 @@ netlify deploy --prod
 2. 「Site settings」→「Environment variables」をクリック
 3. 「Add variable」をクリック
 4. 以下の設定を追加：
-   - **Key**: `GEMINI_API_KEY`
-   - **Value**: 取得したGemini APIキー
+   - **Key**: `MISTRAL_API_KEY`
+   - **Value**: 取得したMistral AI APIキー
 5. 「Save」をクリック
 
 ## 使用方法
 
 ### メインアプリケーションでの使用
 1. `index.html` を開く
-2. 「🤖 AIによるモデル生成 (Gemini)」セクションを見つける
+2. 「🤖 AIによるモデル生成 (Mistral AI)」セクションを見つける
 3. テキストエリアに構造モデルの説明を入力
    - 例: "高さ5m、スパン10mの門型ラーメン。柱脚は固定。"
 4. 「AIで生成」ボタンをクリック
@@ -106,11 +107,11 @@ netlify deploy --prod
 ### よくある問題
 
 #### 1. "APIキーがサーバーに設定されていません"
-- **原因**: 環境変数が正しく設定されていない
+- **原因**: Mistral AI APIキーが正しく設定されていない
 - **解決策**: 上記の環境変数設定手順を確認
 
 #### 2. "APIからのレスポンス形式が不正です"
-- **原因**: Gemini APIからの応答が期待される形式と異なる
+- **原因**: Mistral AI APIからの応答が期待される形式と異なる
 - **解決策**: APIキーが有効か確認、または指示内容を簡潔にする
 
 #### 3. "ネットワークエラー"
@@ -146,7 +147,7 @@ Netlify管理画面の「Functions」タブでログを確認できます。
 
 問題が発生した場合は、以下を確認してください：
 
-1. Gemini APIキーが有効であること
+1. Mistral AI APIキーが有効であること
 2. Netlifyの環境変数が正しく設定されていること
 3. `netlify.toml`ファイルが正しく配置されていること
 4. サーバーレス関数が正しくデプロイされていること
@@ -168,7 +169,12 @@ Netlify管理画面の「Functions」タブでログを確認できます。
 
 ## 更新履歴
 
+- 2024-01-XX: Mistral AI API連携
+  - Mistral AI APIへの移行
+  - より効率的なプロンプト生成
+  - クォータ制限対応
+
 - 2024-01-XX: 初回リリース
   - AIモデル生成機能の追加
-  - Gemini API連携
+  - OpenAI API連携
   - Netlify Functions実装

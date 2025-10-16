@@ -4277,11 +4277,20 @@ document.addEventListener('DOMContentLoaded', () => {
             const dy_forced_mm = parseFloat(row.cells[5]?.querySelector('input')?.value) || 0;
             const r_forced_rad = parseFloat(row.cells[6]?.querySelector('input')?.value) || 0;
 
+            // 境界条件をrestraint形式に変換
+            const support = supportSelect.value;
+            const restraint_x = support === 'fixed' || support === 'pinned' || support === 'roller-x';
+            const restraint_y = support === 'fixed' || support === 'pinned' || support === 'roller-y';
+            const restraint_r = support === 'fixed';
+
             return {
                 id: i + 1,
                 x: parseFloat(xInput.value),
                 y: parseFloat(yInput.value),
-                support: supportSelect.value,
+                support: support,
+                restraint_x: restraint_x,
+                restraint_y: restraint_y,
+                restraint_r: restraint_r,
                 // 強制変位を基本単位(m, rad)で格納
                 dx_forced: dx_forced_mm / 1000,
                 dy_forced: dy_forced_mm / 1000,
