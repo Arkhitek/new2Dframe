@@ -13627,8 +13627,25 @@ async function generateModelWithAIInternal(userPrompt, mode = 'new', retryCount 
             signal: aiGenerationAbortController.signal
         });
 
+        // レスポンスのContent-Typeをチェック
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+            // JSON以外のレスポンス（HTMLエラーページなど）の場合
+            const responseText = await response.text();
+            console.error('サーバーがJSON以外のレスポンスを返しました:', responseText);
+            throw new Error(`サーバーエラー: ${response.status} ${response.statusText}`);
+        }
+
         // 仲介役からの返答を受け取ります
-        const data = await response.json();
+        let data;
+        try {
+            data = await response.json();
+        } catch (jsonError) {
+            console.error('JSON解析エラー:', jsonError);
+            const responseText = await response.text();
+            console.error('受信したレスポンス:', responseText);
+            throw new Error('サーバーからのレスポンスが有効なJSONではありません。');
+        }
 
         // 返答に問題があった場合のエラー処理
         if (!response.ok) {
@@ -13798,25 +13815,48 @@ async function generateModelWithAI(userPrompt, mode = 'new', retryCount = 0) {
  * @returns {string} 抽出されたJSON文字列
  */
 function extractJsonFromResponse(apiResponse) {
-    if (!apiResponse.candidates || !apiResponse.candidates[0].content.parts || !apiResponse.candidates[0].content.parts[0].text) {
-        throw new Error('APIからのレスポンス形式が不正です。');
+    // レスポンスがnullまたはundefinedの場合
+    if (!apiResponse) {
+        throw new Error('APIからのレスポンスが空です。');
+    }
+    
+    // レスポンスの構造をチェック
+    if (!apiResponse.candidates || !apiResponse.candidates[0] || 
+        !apiResponse.candidates[0].content || !apiResponse.candidates[0].content.parts || 
+        !apiResponse.candidates[0].content.parts[0] || !apiResponse.candidates[0].content.parts[0].text) {
+        console.error('APIレスポンスの構造:', apiResponse);
+        throw new Error('APIからのレスポンス形式が不正です。期待される構造と異なります。');
     }
     
     let text = apiResponse.candidates[0].content.parts[0].text;
     
+    // マークダウンコードブロック内のJSONを抽出
     const jsonMatch = text.match(/```(json)?\s*([\s\S]*?)\s*```/);
     if (jsonMatch && jsonMatch[2]) {
         text = jsonMatch[2];
     }
     
+    // JSONオブジェクトの開始と終了を検索
     const startIndex = text.indexOf('{');
     const endIndex = text.lastIndexOf('}');
     
     if (startIndex === -1 || endIndex === -1 || endIndex < startIndex) {
+        console.error('JSONが見つからないテキスト:', text);
         throw new Error('レスポンス内に有効なJSONオブジェクトが見つかりません。');
     }
     
-    return text.substring(startIndex, endIndex + 1);
+    const jsonString = text.substring(startIndex, endIndex + 1);
+    
+    // JSONの有効性を事前チェック
+    try {
+        JSON.parse(jsonString);
+    } catch (parseError) {
+        console.error('JSON解析エラー:', parseError);
+        console.error('問題のあるJSON文字列:', jsonString);
+        throw new Error('抽出されたJSON文字列が無効です。');
+    }
+    
+    return jsonString;
 }
 
 /**
