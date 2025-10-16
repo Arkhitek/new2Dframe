@@ -14305,16 +14305,54 @@ function integrateEditData(newState) {
     };
     
     // 新しいデータを既存データに統合（重複なし）
-    const integratedState = {
-        nodes: [...existingNodesWithDefaults, ...uniqueNewNodes],
-        members: [...(existingModelData.members || []), ...uniqueNewMembers],
-        nodeLoads: [...convertNodeLoads(existingModelData.nodeLoads), ...convertNodeLoads(newState.nodeLoads)],
-        memberLoads: [...convertMemberLoads(existingModelData.memberLoads), ...convertMemberLoads(newState.memberLoads)]
-    };
+        // 荷重データの重複を防ぐためのロジック
+        const existingNodeLoads = convertNodeLoads(existingModelData.nodeLoads);
+        const newNodeLoads = convertNodeLoads(newState.nodeLoads);
+        const existingMemberLoads = convertMemberLoads(existingModelData.memberLoads);
+        const newMemberLoads = convertMemberLoads(newState.memberLoads);
+
+        // 節点荷重の重複除去（同じ節点番号の荷重は新規で上書き）
+        const nodeLoadMap = new Map();
+        
+        // 既存の荷重を追加
+        existingNodeLoads.forEach(load => {
+            nodeLoadMap.set(load.node, load);
+        });
+        
+        // 新規の荷重で上書き（0でない荷重のみ）
+        newNodeLoads.forEach(load => {
+            if (load.px !== 0 || load.py !== 0 || load.mz !== 0) {
+                nodeLoadMap.set(load.node, load);
+            }
+        });
+
+        // 部材荷重の重複除去（同じ部材番号の荷重は新規で上書き）
+        const memberLoadMap = new Map();
+        
+        // 既存の荷重を追加
+        existingMemberLoads.forEach(load => {
+            memberLoadMap.set(load.member, load);
+        });
+        
+        // 新規の荷重で上書き（0でない荷重のみ）
+        newMemberLoads.forEach(load => {
+            if (load.w !== 0) {
+                memberLoadMap.set(load.member, load);
+            }
+        });
+
+        const integratedState = {
+            nodes: [...existingNodesWithDefaults, ...uniqueNewNodes],
+            members: [...(existingModelData.members || []), ...uniqueNewMembers],
+            nodeLoads: Array.from(nodeLoadMap.values()),
+            memberLoads: Array.from(memberLoadMap.values())
+        };
     
-    console.log('🔍 統合後のデータ:', integratedState);
-    console.log('🔍 統合後の節点荷重詳細:', integratedState.nodeLoads);
-    console.log('🔍 統合後の部材荷重詳細:', integratedState.memberLoads);
+        console.log('🔍 重複除去後の節点荷重数:', integratedState.nodeLoads.length);
+        console.log('🔍 重複除去後の部材荷重数:', integratedState.memberLoads.length);
+        console.log('🔍 統合後のデータ:', integratedState);
+        console.log('🔍 統合後の節点荷重詳細:', integratedState.nodeLoads);
+        console.log('🔍 統合後の部材荷重詳細:', integratedState.memberLoads);
     
     // 統合されたデータでテーブルを更新
     if (window.restoreState) {
