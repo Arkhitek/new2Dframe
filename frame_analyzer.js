@@ -13890,6 +13890,16 @@ function getCurrentModelData() {
     
     // 節点荷重情報を取得
     if (elements.nodeLoadsTable && elements.nodeLoadsTable.rows) {
+        console.log('🔍 節点荷重テーブルから完全情報を取得中...');
+        console.log('🔍 節点荷重テーブル行数:', elements.nodeLoadsTable.rows.length);
+        
+        // テーブルの構造をデバッグ出力
+        if (elements.nodeLoadsTable.rows.length > 0) {
+            console.log('🔍 節点荷重テーブル第1行のセル数:', elements.nodeLoadsTable.rows[0]?.cells?.length);
+            console.log('🔍 節点荷重テーブル第1行の内容:', 
+                elements.nodeLoadsTable.rows[0]?.cells?.map(cell => cell?.textContent?.trim()).join(' | '));
+        }
+        
         for (let i = 0; i < elements.nodeLoadsTable.rows.length; i++) {
             const row = elements.nodeLoadsTable.rows[i];
             
@@ -13938,15 +13948,27 @@ function getCurrentModelData() {
             console.log(`🔍 節点荷重 ${node} 完全データ取得:`, loadData);
             nodeLoads.push(loadData);
         }
+    } else {
+        console.log('🔍 節点荷重テーブルが見つからないか、行が存在しません');
     }
     
     // 部材荷重情報を取得
     if (elements.memberLoadsTable && elements.memberLoadsTable.rows) {
+        console.log('🔍 部材荷重テーブルから完全情報を取得中...');
+        console.log('🔍 部材荷重テーブル行数:', elements.memberLoadsTable.rows.length);
+        
+        // テーブルの構造をデバッグ出力
+        if (elements.memberLoadsTable.rows.length > 0) {
+            console.log('🔍 部材荷重テーブル第1行のセル数:', elements.memberLoadsTable.rows[0]?.cells?.length);
+            console.log('🔍 部材荷重テーブル第1行の内容:', 
+                elements.memberLoadsTable.rows[0]?.cells?.map(cell => cell?.textContent?.trim()).join(' | '));
+        }
+        
         for (let i = 0; i < elements.memberLoadsTable.rows.length; i++) {
             const row = elements.memberLoadsTable.rows[i];
             
             // 行とセルが存在するかチェック
-            if (!row || !row.cells || row.cells.length < 4) {
+            if (!row || !row.cells || row.cells.length < 2) {
                 continue;
             }
             
@@ -13963,33 +13985,29 @@ function getCurrentModelData() {
             }
             
             const memberInput = row.cells[0]?.querySelector('input');
-            const loadTypeInput = row.cells[1]?.querySelector('input');
-            const magnitudeInput = row.cells[2]?.querySelector('input');
-            const positionInput = row.cells[3]?.querySelector('input');
+            const wInput = row.cells[1]?.querySelector('input');
             
-            if (!memberInput || !loadTypeInput || !magnitudeInput || !positionInput) {
+            if (!memberInput || !wInput) {
                 continue;
             }
             
             const member = parseInt(memberInput.value) || 1;
-            const loadType = loadTypeInput.value?.trim() || '';
-            const magnitude = parseFloat(magnitudeInput.value) || 0;
-            const position = parseFloat(positionInput.value) || 0;
+            const w = parseFloat(wInput.value) || 0;
             
-            // 空の行（magnitudeが0または空）はスキップ
-            if (magnitude === 0 || loadType === '') {
+            // 空の行（荷重が0）はスキップ
+            if (w === 0) {
                 continue;
             }
             
             const loadData = {
                 m: member,
-                type: loadType,
-                magnitude: magnitude,
-                position: position
+                w: w
             };
             console.log(`🔍 部材荷重 ${member} 完全データ取得:`, loadData);
             memberLoads.push(loadData);
         }
+    } else {
+        console.log('🔍 部材荷重テーブルが見つからないか、行が存在しません');
     }
     
     const modelData = {
