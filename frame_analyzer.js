@@ -14003,6 +14003,18 @@ function getCurrentModelData() {
             
             // 開始節点と終了節点が有効な場合のみ追加
             if (!isNaN(startNode) && !isNaN(endNode) && startNode !== endNode) {
+                // 節点座標から長さを計算
+                let length = 0;
+                if (startNode <= nodes.length && endNode <= nodes.length) {
+                    const startNodeData = nodes[startNode - 1];
+                    const endNodeData = nodes[endNode - 1];
+                    if (startNodeData && endNodeData) {
+                        const dx = endNodeData.x - startNodeData.x;
+                        const dy = endNodeData.y - startNodeData.y;
+                        length = Math.sqrt(dx * dx + dy * dy);
+                    }
+                }
+                
                 const memberData = {
                     i: startNode,
                     j: endNode,
@@ -14014,7 +14026,8 @@ function getCurrentModelData() {
                     i_conn: i_conn,
                     j_conn: j_conn,
                     sectionName: sectionName,
-                    sectionAxis: sectionAxis
+                    sectionAxis: sectionAxis,
+                    length: length // 部材の長さを追加
                 };
                 console.log(`🔍 部材 ${memberNumber} 完全データ取得:`, memberData);
                 members.push(memberData);
@@ -14373,19 +14386,48 @@ function integrateEditData(newState) {
         return null;
     };
     
-    // 既存部材のIDセットを作成
-    const existingMemberIds = new Set((existingModelData.members || []).map(member => {
-        const memberId = generateMemberId(member);
-        return memberId;
-    }).filter(id => id !== null));
+    // 部材の統合ロジック（既存部材の更新と新規部材の追加を考慮）
+    const existingMembers = existingModelData.members || [];
+    const newMembers = newState.members || [];
     
-    // 新しい部材から重複しないもののみを抽出
-    const uniqueNewMembers = (newState.members || []).filter(member => {
-        const memberId = generateMemberId(member);
-        return memberId && !existingMemberIds.has(memberId);
+    // 既存部材と新規部材を統合（修正・追加対応）
+    const integratedMembers = [];
+    
+    // 既存部材を処理
+    existingMembers.forEach(existingMember => {
+        const existingMemberId = generateMemberId(existingMember);
+        
+        // 同じIDを持つ新規部材があるかチェック（修正された部材）
+        const updatedMember = newMembers.find(newMember => {
+            const newMemberId = generateMemberId(newMember);
+            return newMemberId === existingMemberId;
+        });
+        
+        if (updatedMember) {
+            // 修正された部材がある場合は新規部材を使用
+            console.log(`🔍 部材修正検出: ${existingMemberId}`, updatedMember);
+            integratedMembers.push(updatedMember);
+        } else {
+            // 修正されていない場合は既存部材を保持
+            integratedMembers.push(existingMember);
+        }
     });
     
-    console.log(`🔍 既存部材数: ${(existingModelData.members || []).length}, 新規部材数: ${uniqueNewMembers.length}`);
+    // 完全に新しい部材を追加
+    newMembers.forEach(newMember => {
+        const newMemberId = generateMemberId(newMember);
+        const isExistingMember = existingMembers.some(existingMember => {
+            const existingMemberId = generateMemberId(existingMember);
+            return existingMemberId === newMemberId;
+        });
+        
+        if (!isExistingMember) {
+            console.log(`🔍 新規部材追加: ${newMemberId}`, newMember);
+            integratedMembers.push(newMember);
+        }
+    });
+    
+    console.log(`🔍 既存部材数: ${existingMembers.length}, 新規部材数: ${newMembers.length}, 統合後部材数: ${integratedMembers.length}`);
     console.log(`🔍 既存節点荷重数: ${(existingModelData.nodeLoads || []).length}, 新規節点荷重数: ${(newState.nodeLoads || []).length}`);
     console.log(`🔍 既存部材荷重数: ${(existingModelData.memberLoads || []).length}, 新規部材荷重数: ${(newState.memberLoads || []).length}`);
     
@@ -14459,7 +14501,7 @@ function integrateEditData(newState) {
 
         const integratedState = {
             nodes: [...existingNodesWithDefaults, ...uniqueNewNodes],
-            members: [...(existingModelData.members || []), ...uniqueNewMembers],
+            members: integratedMembers, // 統合された部材データを使用
             nodeLoads: Array.from(nodeLoadMap.values()),
             memberLoads: Array.from(memberLoadMap.values())
         };

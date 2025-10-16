@@ -164,6 +164,10 @@ JSONデータのみを出力し、前後の説明やマークダウンの\`\`\`j
 - 既存の構造の基本形状は維持し、指示された変更のみを適用してください
 - 新しく追加する節点や部材は、既存の番号の続きから開始してください
 - 削除する場合は、後続の番号を詰める必要はありません
+- **部材の長さ変更や位置変更の場合**:
+  - 「スパンを○mに変更」「梁の長さを○mに変更」などの指示では、既存の部材の節点番号を変更して長さを調整してください
+  - 既存の部材の節点番号（i, j）を新しい座標の節点に変更することで、部材の長さや位置を修正できます
+  - 必要に応じて新しい節点を追加し、既存部材の接続先を変更してください
 `;
     }
 
@@ -190,7 +194,9 @@ function createEditPrompt(userPrompt, currentModel) {
     if (currentModel && currentModel.members && currentModel.members.length > 0) {
         editPrompt += `現在の部材情報:\n`;
         currentModel.members.forEach((member, index) => {
-            editPrompt += `部材${index + 1}: 節点${member.n1} → 節点${member.n2} (${member.s})\n`;
+            const length = member.length ? ` (長さ: ${member.length.toFixed(2)}m)` : '';
+            const section = member.sectionName ? ` (断面: ${member.sectionName})` : '';
+            editPrompt += `部材${index + 1}: 節点${member.i} → 節点${member.j}${length}${section}\n`;
         });
         editPrompt += `\n`;
     }
